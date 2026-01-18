@@ -6,16 +6,22 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, JSON
 from datetime import datetime
+from loguru import logger
 
 from app.core.config import settings
 
 
 # 创建异步引擎
-DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-engine = create_async_engine(DATABASE_URL, echo=settings.DEBUG)
-
-# 创建会话工厂
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+try:
+    DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    engine = create_async_engine(DATABASE_URL, echo=settings.DEBUG)
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    HAS_DATABASE = True
+except Exception as e:
+    logger.warning(f"数据库连接配置失败: {e}")
+    engine = None
+    async_session = None
+    HAS_DATABASE = False
 
 
 class Base(DeclarativeBase):
@@ -159,11 +165,21 @@ class Alert(Base):
 
 async def init_db():
     """初始化数据库"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if not HAS_DATABASE or engine is None:
+        logger.warning("数据库未配置，跳过初始化。部分功能可能不可用。")
+        return
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.error(f"数据库初始化失败: {e}")
+        logger.warning("将继续运行，但数据库相关功能可能不可用")
 
 
 async def get_session() -> AsyncSession:
     """获取数据库会话"""
+    if not HAS_DATABASE or async_session is None:
+        raise RuntimeError("数据库未配置")
     async with async_session() as session:
         yield session

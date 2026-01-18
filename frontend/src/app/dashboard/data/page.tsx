@@ -8,21 +8,24 @@ import {
   Upload,
   RefreshCw,
   Search,
-  Filter,
   Plus,
   Trash2,
-  Edit,
   Eye,
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle,
   HardDrive,
   Cloud,
   FileText,
-  BarChart3,
-  TrendingUp
 } from "lucide-react";
+import {
+  useDataSources,
+  useStocks,
+  useStockData,
+  useDataQuality,
+  useStorageStats,
+  useSyncData,
+} from "@/lib";
 
 // 数据源卡片
 function DataSourceCard({
@@ -35,27 +38,32 @@ function DataSourceCard({
   delay = 0,
 }: {
   name: string;
-  type: "api" | "file" | "database";
-  status: "connected" | "error" | "syncing";
-  lastSync: string;
-  records: string;
+  type: string;
+  status: string;
+  lastSync: string | null;
+  records: number;
   size: string;
   delay?: number;
 }) {
-  const statusConfig = {
+  const statusConfig: Record<string, { color: string; label: string; icon: React.ElementType }> = {
     connected: { color: "clay-badge-success", label: "已连接", icon: CheckCircle },
+    available: { color: "clay-badge-info", label: "可用", icon: Clock },
     error: { color: "clay-badge-danger", label: "错误", icon: XCircle },
     syncing: { color: "clay-badge-warning", label: "同步中", icon: RefreshCw },
   };
 
-  const typeConfig = {
+  const typeConfig: Record<string, { icon: React.ElementType; label: string }> = {
+    aggregator: { icon: Cloud, label: "平台" },
+    provider: { icon: Cloud, label: "数据源" },
     api: { icon: Cloud, label: "API" },
     file: { icon: FileText, label: "文件" },
     database: { icon: Database, label: "数据库" },
   };
 
-  const StatusIcon = statusConfig[status].icon;
-  const TypeIcon = typeConfig[type].icon;
+  const config = statusConfig[status] || statusConfig.available;
+  const typeInfo = typeConfig[type] || typeConfig.api;
+  const StatusIcon = config.icon;
+  const TypeIcon = typeInfo.icon;
 
   return (
     <motion.div
@@ -71,19 +79,19 @@ function DataSourceCard({
           </div>
           <div>
             <h3 className="text-lg font-semibold text-slate-100">{name}</h3>
-            <p className="text-sm text-slate-400">{typeConfig[type].label}</p>
+            <p className="text-sm text-slate-400">{typeInfo.label}</p>
           </div>
         </div>
-        <span className={`clay-badge ${statusConfig[status].color} flex items-center gap-1`}>
+        <span className={`clay-badge ${config.color} flex items-center gap-1`}>
           <StatusIcon className={`w-3 h-3 ${status === "syncing" ? "animate-spin" : ""}`} />
-          {statusConfig[status].label}
+          {config.label}
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="p-2 rounded-clay-sm bg-dark-800/50 text-center">
           <div className="text-xs text-slate-500">记录数</div>
-          <div className="font-medium text-slate-200">{records}</div>
+          <div className="font-medium text-slate-200">{records.toLocaleString()}</div>
         </div>
         <div className="p-2 rounded-clay-sm bg-dark-800/50 text-center">
           <div className="text-xs text-slate-500">大小</div>
@@ -91,7 +99,9 @@ function DataSourceCard({
         </div>
         <div className="p-2 rounded-clay-sm bg-dark-800/50 text-center">
           <div className="text-xs text-slate-500">更新</div>
-          <div className="font-medium text-slate-200">{lastSync}</div>
+          <div className="font-medium text-slate-200 text-xs">
+            {lastSync ? new Date(lastSync).toLocaleTimeString() : "N/A"}
+          </div>
         </div>
       </div>
 
@@ -103,34 +113,34 @@ function DataSourceCard({
         <button className="clay-button-secondary !px-3 !py-2">
           <Eye className="w-4 h-4" />
         </button>
-        <button className="clay-button-secondary !px-3 !py-2">
-          <Edit className="w-4 h-4" />
-        </button>
       </div>
     </motion.div>
   );
 }
 
-// 股票列表
+// 股票列表 - 使用真实数据
 function StockList() {
-  const stocks = [
-    { symbol: "AAPL", name: "苹果公司", records: "2,520", lastUpdate: "今天 09:30", status: "updated" },
-    { symbol: "GOOGL", name: "谷歌", records: "2,520", lastUpdate: "今天 09:30", status: "updated" },
-    { symbol: "MSFT", name: "微软", records: "2,520", lastUpdate: "今天 09:30", status: "updated" },
-    { symbol: "NVDA", name: "英伟达", records: "2,520", lastUpdate: "今天 09:30", status: "updated" },
-    { symbol: "TSLA", name: "特斯拉", records: "2,520", lastUpdate: "昨天 15:00", status: "outdated" },
-    { symbol: "AMZN", name: "亚马逊", records: "2,520", lastUpdate: "昨天 15:00", status: "outdated" },
-    { symbol: "META", name: "Meta", records: "2,520", lastUpdate: "今天 09:30", status: "updated" },
-    { symbol: "NFLX", name: "奈飞", records: "2,520", lastUpdate: "今天 09:30", status: "updated" },
-  ];
-
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
 
-  const filteredStocks = stocks.filter(
-    (stock) =>
-      stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      stock.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const { data, isLoading, error, refetch } = useStocks({
+    search: searchTerm || undefined,
+    page,
+    page_size: 10,
+  });
+
+  const syncMutation = useSyncData();
+
+  const handleSync = async (symbol: string) => {
+    const endDate = new Date().toISOString().split("T")[0];
+    const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    await syncMutation.mutateAsync({
+      symbols: [symbol],
+      start_date: startDate,
+      end_date: endDate,
+    });
+  };
 
   return (
     <div className="clay-card">
@@ -147,6 +157,13 @@ function StockList() {
               className="clay-input !pl-9 !py-2 text-sm w-48"
             />
           </div>
+          <button
+            onClick={() => refetch()}
+            className="clay-button-secondary !px-3 !py-2"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
           <button className="clay-button !px-3 !py-2 text-sm flex items-center gap-1">
             <Plus className="w-4 h-4" />
             添加
@@ -154,136 +171,205 @@ function StockList() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="clay-table">
-          <thead>
-            <tr>
-              <th>代码</th>
-              <th>名称</th>
-              <th>记录数</th>
-              <th>最后更新</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStocks.map((stock) => (
-              <tr key={stock.symbol}>
-                <td className="font-medium text-slate-200">{stock.symbol}</td>
-                <td className="text-slate-400">{stock.name}</td>
-                <td>{stock.records}</td>
-                <td className="text-slate-500">{stock.lastUpdate}</td>
-                <td>
-                  <span className={`clay-badge ${
-                    stock.status === "updated" ? "clay-badge-success" : "clay-badge-warning"
-                  }`}>
-                    {stock.status === "updated" ? "已更新" : "待更新"}
-                  </span>
-                </td>
-                <td>
-                  <div className="flex items-center gap-1">
-                    <button className="p-1.5 rounded hover:bg-dark-700">
-                      <RefreshCw className="w-4 h-4 text-slate-400" />
-                    </button>
-                    <button className="p-1.5 rounded hover:bg-dark-700">
-                      <Eye className="w-4 h-4 text-slate-400" />
-                    </button>
-                    <button className="p-1.5 rounded hover:bg-dark-700">
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {error ? (
+        <div className="text-center py-8 text-red-400">
+          加载失败: {error.message}
+        </div>
+      ) : isLoading ? (
+        <div className="text-center py-8 text-slate-400">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+          加载中...
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="clay-table">
+              <thead>
+                <tr>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>行业</th>
+                  <th>记录数</th>
+                  <th>最后更新</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.items.map((stock) => (
+                  <tr key={stock.symbol}>
+                    <td className="font-medium text-slate-200">{stock.symbol}</td>
+                    <td className="text-slate-400">{stock.name}</td>
+                    <td className="text-slate-500">{stock.sector}</td>
+                    <td>{stock.records.toLocaleString()}</td>
+                    <td className="text-slate-500">
+                      {new Date(stock.last_update).toLocaleDateString()}
+                    </td>
+                    <td>
+                      <span
+                        className={`clay-badge ${
+                          stock.status === "updated" ? "clay-badge-success" : "clay-badge-warning"
+                        }`}
+                      >
+                        {stock.status === "updated" ? "已更新" : "待更新"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleSync(stock.symbol)}
+                          className="p-1.5 rounded hover:bg-dark-700"
+                          disabled={syncMutation.isPending}
+                        >
+                          <RefreshCw
+                            className={`w-4 h-4 text-slate-400 ${
+                              syncMutation.isPending ? "animate-spin" : ""
+                            }`}
+                          />
+                        </button>
+                        <button className="p-1.5 rounded hover:bg-dark-700">
+                          <Eye className="w-4 h-4 text-slate-400" />
+                        </button>
+                        <button className="p-1.5 rounded hover:bg-dark-700">
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 分页 */}
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-dark-700">
+            <span className="text-sm text-slate-400">
+              共 {data?.total || 0} 条记录
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="clay-button-secondary !px-3 !py-1 text-sm disabled:opacity-50"
+              >
+                上一页
+              </button>
+              <span className="px-3 py-1 text-slate-400">第 {page} 页</span>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={!data || data.items.length < 10}
+                className="clay-button-secondary !px-3 !py-1 text-sm disabled:opacity-50"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-// 数据质量面板
+// 数据质量面板 - 使用真实数据
 function DataQualityPanel() {
-  const qualityMetrics = [
-    { name: "完整性", score: 98.5, status: "good" },
-    { name: "准确性", score: 99.2, status: "good" },
-    { name: "一致性", score: 97.8, status: "good" },
-    { name: "时效性", score: 92.3, status: "warning" },
-  ];
+  const { data, isLoading } = useDataQuality();
+
+  const metrics = data
+    ? [
+        { name: "完整性", score: data.completeness, status: data.completeness >= 95 ? "good" : "warning" },
+        { name: "准确性", score: data.accuracy, status: data.accuracy >= 95 ? "good" : "warning" },
+        { name: "一致性", score: data.consistency, status: data.consistency >= 95 ? "good" : "warning" },
+        { name: "时效性", score: data.timeliness, status: data.timeliness >= 95 ? "good" : "warning" },
+      ]
+    : [];
 
   return (
     <div className="clay-card">
       <h3 className="text-lg font-semibold text-slate-100 mb-4">数据质量</h3>
-      <div className="space-y-4">
-        {qualityMetrics.map((metric) => (
-          <div key={metric.name}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-300">{metric.name}</span>
-              <span className={`font-medium ${
-                metric.status === "good" ? "text-neon-green" : "text-yellow-400"
-              }`}>
-                {metric.score}%
-              </span>
-            </div>
-            <div className="clay-progress">
-              <div
-                className={`clay-progress-bar ${
-                  metric.status === "warning" ? "!bg-yellow-500" : ""
-                }`}
-                style={{ width: `${metric.score}%` }}
-              ></div>
+      {isLoading ? (
+        <div className="text-center py-4 text-slate-400">加载中...</div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            {metrics.map((metric) => (
+              <div key={metric.name}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300">{metric.name}</span>
+                  <span
+                    className={`font-medium ${
+                      metric.status === "good" ? "text-neon-green" : "text-yellow-400"
+                    }`}
+                  >
+                    {metric.score.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="clay-progress">
+                  <div
+                    className={`clay-progress-bar ${metric.status === "warning" ? "!bg-yellow-500" : ""}`}
+                    style={{ width: `${metric.score}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t border-dark-700">
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <CheckCircle className="w-4 h-4 text-neon-green" />
+              <span>整体评分: {data?.overall.toFixed(1)}%</span>
             </div>
           </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-4 border-t border-dark-700">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <CheckCircle className="w-4 h-4 text-neon-green" />
-          <span>数据质量整体良好</span>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
 
-// 存储统计
+// 存储统计 - 使用真实数据
 function StorageStats() {
-  const storageItems = [
-    { name: "价格数据", size: 2.5, color: "bg-neon-blue" },
-    { name: "特征数据", size: 1.8, color: "bg-neon-purple" },
-    { name: "模型文件", size: 0.8, color: "bg-neon-green" },
-    { name: "回测结果", size: 0.5, color: "bg-yellow-400" },
-    { name: "日志文件", size: 0.3, color: "bg-orange-400" },
-  ];
+  const { data, isLoading } = useStorageStats();
 
-  const totalSize = storageItems.reduce((a, b) => a + b.size, 0);
-  const maxSize = 10; // GB
+  if (isLoading || !data) {
+    return (
+      <div className="clay-card">
+        <h3 className="text-lg font-semibold text-slate-100 mb-4">存储使用</h3>
+        <div className="text-center py-4 text-slate-400">加载中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="clay-card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-slate-100">存储使用</h3>
-        <span className="text-sm text-slate-400">{totalSize.toFixed(1)} / {maxSize} GB</span>
+        <span className="text-sm text-slate-400">
+          {data.total_size_gb.toFixed(1)} / {data.max_size_gb} GB
+        </span>
       </div>
 
       {/* 存储条 */}
       <div className="h-4 rounded-full bg-dark-700 overflow-hidden flex mb-4">
-        {storageItems.map((item, index) => (
+        {data.items.map((item) => (
           <div
             key={item.name}
-            className={`h-full ${item.color}`}
-            style={{ width: `${(item.size / maxSize) * 100}%` }}
+            style={{
+              width: `${(item.size_gb / data.max_size_gb) * 100}%`,
+              backgroundColor: item.color,
+            }}
+            className="h-full"
           ></div>
         ))}
       </div>
 
       {/* 图例 */}
       <div className="grid grid-cols-2 gap-2">
-        {storageItems.map((item) => (
+        {data.items.map((item) => (
           <div key={item.name} className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: item.color }}
+            ></div>
             <span className="text-sm text-slate-400">{item.name}</span>
-            <span className="text-sm text-slate-500 ml-auto">{item.size} GB</span>
+            <span className="text-sm text-slate-500 ml-auto">{item.size_gb} GB</span>
           </div>
         ))}
       </div>
@@ -291,140 +377,89 @@ function StorageStats() {
   );
 }
 
-// 同步任务
-function SyncTasks() {
-  const tasks = [
-    { name: "获取AAPL日线数据", status: "completed", time: "2分钟前" },
-    { name: "计算技术指标", status: "running", time: "进行中" },
-    { name: "更新特征矩阵", status: "pending", time: "待执行" },
-    { name: "同步Yahoo Finance", status: "completed", time: "10分钟前" },
-  ];
-
-  const statusConfig = {
-    completed: { icon: CheckCircle, color: "text-neon-green" },
-    running: { icon: RefreshCw, color: "text-yellow-400" },
-    pending: { icon: Clock, color: "text-slate-400" },
-  };
-
-  return (
-    <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">同步任务</h3>
-        <button className="clay-button-secondary !px-3 !py-2 text-sm">
-          查看全部
-        </button>
-      </div>
-      <div className="space-y-3">
-        {tasks.map((task, index) => {
-          const config = statusConfig[task.status as keyof typeof statusConfig];
-          const Icon = config.icon;
-          return (
-            <div key={index} className="flex items-center gap-3 p-3 rounded-clay-sm bg-dark-800/50">
-              <Icon className={`w-5 h-5 ${config.color} ${
-                task.status === "running" ? "animate-spin" : ""
-              }`} />
-              <div className="flex-1">
-                <div className="text-sm text-slate-200">{task.name}</div>
-              </div>
-              <span className="text-xs text-slate-500">{task.time}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// 数据预览
+// 数据预览 - 使用真实数据
 function DataPreview() {
-  const previewData = [
-    { date: "2025-01-17", open: 185.32, high: 186.45, low: 184.12, close: 185.89, volume: "52.3M" },
-    { date: "2025-01-16", open: 184.56, high: 185.78, low: 183.90, close: 185.32, volume: "48.1M" },
-    { date: "2025-01-15", open: 183.25, high: 184.80, low: 182.50, close: 184.56, volume: "55.8M" },
-    { date: "2025-01-14", open: 182.10, high: 183.65, low: 181.20, close: 183.25, volume: "42.5M" },
-    { date: "2025-01-13", open: 181.45, high: 182.90, low: 180.80, close: 182.10, volume: "38.2M" },
-  ];
+  const [symbol, setSymbol] = useState("AAPL");
+  const { data, isLoading, error } = useStockData(symbol, {
+    start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+  });
 
   return (
     <div className="clay-card">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">数据预览 - AAPL</h3>
+        <h3 className="text-lg font-semibold text-slate-100">数据预览 - {symbol}</h3>
         <div className="flex items-center gap-2">
-          <select className="clay-select !py-2 !px-3 text-sm w-32">
-            <option>AAPL</option>
-            <option>GOOGL</option>
-            <option>MSFT</option>
+          <select
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value)}
+            className="clay-select !py-2 !px-3 text-sm w-32"
+          >
+            <option value="AAPL">AAPL</option>
+            <option value="GOOGL">GOOGL</option>
+            <option value="MSFT">MSFT</option>
+            <option value="NVDA">NVDA</option>
+            <option value="TSLA">TSLA</option>
           </select>
           <button className="clay-button-secondary !px-3 !py-2">
             <Download className="w-4 h-4" />
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="clay-table">
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>开盘</th>
-              <th>最高</th>
-              <th>最低</th>
-              <th>收盘</th>
-              <th>成交量</th>
-            </tr>
-          </thead>
-          <tbody>
-            {previewData.map((row) => (
-              <tr key={row.date}>
-                <td className="font-medium text-slate-200">{row.date}</td>
-                <td>${row.open.toFixed(2)}</td>
-                <td className="text-neon-green">${row.high.toFixed(2)}</td>
-                <td className="text-red-400">${row.low.toFixed(2)}</td>
-                <td>${row.close.toFixed(2)}</td>
-                <td className="text-slate-400">{row.volume}</td>
+
+      {error ? (
+        <div className="text-center py-8 text-red-400">
+          加载失败: {error.message}
+        </div>
+      ) : isLoading ? (
+        <div className="text-center py-8 text-slate-400">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+          加载中...
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="clay-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>开盘</th>
+                <th>最高</th>
+                <th>最低</th>
+                <th>收盘</th>
+                <th>成交量</th>
+                <th>涨跌幅</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {data?.data.slice(-10).reverse().map((row) => (
+                <tr key={row.date}>
+                  <td className="font-medium text-slate-200">
+                    {new Date(row.date).toLocaleDateString()}
+                  </td>
+                  <td>${row.open.toFixed(2)}</td>
+                  <td className="text-neon-green">${row.high.toFixed(2)}</td>
+                  <td className="text-red-400">${row.low.toFixed(2)}</td>
+                  <td>${row.close.toFixed(2)}</td>
+                  <td className="text-slate-400">
+                    {(row.volume / 1000000).toFixed(1)}M
+                  </td>
+                  <td className={row.pct_change && row.pct_change >= 0 ? "text-neon-green" : "text-red-400"}>
+                    {row.pct_change ? `${row.pct_change >= 0 ? "+" : ""}${row.pct_change.toFixed(2)}%` : "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-2 text-sm text-slate-500 text-right">
+            共 {data?.records} 条记录 | 数据源: {data?.provider}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function DataPage() {
-  const dataSources = [
-    {
-      name: "Yahoo Finance",
-      type: "api" as const,
-      status: "connected" as const,
-      lastSync: "5分钟前",
-      records: "125K",
-      size: "850 MB",
-    },
-    {
-      name: "Tushare Pro",
-      type: "api" as const,
-      status: "connected" as const,
-      lastSync: "10分钟前",
-      records: "89K",
-      size: "620 MB",
-    },
-    {
-      name: "本地CSV文件",
-      type: "file" as const,
-      status: "connected" as const,
-      lastSync: "1小时前",
-      records: "45K",
-      size: "320 MB",
-    },
-    {
-      name: "PostgreSQL",
-      type: "database" as const,
-      status: "syncing" as const,
-      lastSync: "同步中...",
-      records: "258K",
-      size: "1.8 GB",
-    },
-  ];
+  const { data: sources, isLoading: sourcesLoading } = useDataSources();
 
   return (
     <div className="space-y-6">
@@ -450,19 +485,34 @@ export default function DataPage() {
 
       {/* 数据源卡片 */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {dataSources.map((source, index) => (
-          <DataSourceCard key={source.name} {...source} delay={index * 0.1} />
-        ))}
+        {sourcesLoading ? (
+          <div className="col-span-4 text-center py-8 text-slate-400">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+            加载数据源...
+          </div>
+        ) : (
+          sources?.map((source, index) => (
+            <DataSourceCard
+              key={source.name}
+              name={source.name}
+              type={source.type}
+              status={source.status}
+              lastSync={source.last_sync}
+              records={source.records}
+              size={source.size}
+              delay={index * 0.1}
+            />
+          ))
+        )}
       </div>
 
       {/* 股票列表 */}
       <StockList />
 
-      {/* 数据质量、存储和任务 */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      {/* 数据质量和存储 */}
+      <div className="grid lg:grid-cols-2 gap-6">
         <DataQualityPanel />
         <StorageStats />
-        <SyncTasks />
       </div>
 
       {/* 数据预览 */}

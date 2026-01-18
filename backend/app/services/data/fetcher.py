@@ -9,8 +9,14 @@ from typing import Optional, List, Dict, Any, Union
 from loguru import logger
 import time
 
-# OpenBB SDK
-from openbb import obb
+# OpenBB SDK (with fallback to yfinance)
+try:
+    from openbb import obb
+    HAS_OPENBB = True
+except ImportError:
+    HAS_OPENBB = False
+    import yfinance as yf
+    logger.warning("OpenBB not installed, falling back to yfinance")
 
 
 class OpenBBFetcher:
@@ -56,16 +62,22 @@ class OpenBBFetcher:
             end_date = end_date or datetime.now().strftime("%Y-%m-%d")
             logger.info(f"获取历史数据: {symbol}, {start_date} ~ {end_date}, interval={interval}")
 
-            # 使用OpenBB获取数据
-            output = obb.equity.price.historical(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                interval=interval,
-                provider=self.provider
-            )
-
-            df = output.to_dataframe()
+            if HAS_OPENBB:
+                # 使用OpenBB获取数据
+                output = obb.equity.price.historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    interval=interval,
+                    provider=self.provider
+                )
+                df = output.to_dataframe()
+            else:
+                # 使用yfinance作为fallback
+                ticker = yf.Ticker(symbol)
+                df = ticker.history(start=start_date, end=end_date, interval=interval)
+                df = df.reset_index()
+                df.columns = [c.lower().replace(' ', '_') for c in df.columns]
 
             if df.empty:
                 logger.warning(f"未获取到数据: {symbol}")
@@ -76,7 +88,8 @@ class OpenBBFetcher:
 
             # 添加额外信息
             df['symbol'] = symbol
-            df['pct_change'] = df['close'].pct_change() * 100
+            if 'close' in df.columns:
+                df['pct_change'] = df['close'].pct_change() * 100
 
             # 确保日期列正确
             if 'date' not in df.columns and df.index.name == 'date':
@@ -100,16 +113,33 @@ class OpenBBFetcher:
             实时报价字典
         """
         try:
-            output = obb.equity.price.quote(
-                symbol=symbol,
-                provider=self.provider
-            )
-            df = output.to_dataframe()
+            if HAS_OPENBB:
+                output = obb.equity.price.quote(
+                    symbol=symbol,
+                    provider=self.provider
+                )
+                df = output.to_dataframe()
 
-            if df.empty:
-                return {}
+                if df.empty:
+                    return {}
 
-            return df.iloc[0].to_dict()
+                return df.iloc[0].to_dict()
+            else:
+                # 使用yfinance作为fallback
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                return {
+                    'symbol': symbol,
+                    'last_price': info.get('regularMarketPrice', 0),
+                    'change': info.get('regularMarketChange', 0),
+                    'change_percent': info.get('regularMarketChangePercent', 0),
+                    'volume': info.get('regularMarketVolume', 0),
+                    'market_cap': info.get('marketCap', 0),
+                    'high': info.get('dayHigh', 0),
+                    'low': info.get('dayLow', 0),
+                    'open': info.get('regularMarketOpen', 0),
+                    'previous_close': info.get('regularMarketPreviousClose', 0),
+                }
 
         except Exception as e:
             logger.error(f"获取报价失败: {symbol}, 错误: {e}")
@@ -128,27 +158,33 @@ class OpenBBFetcher:
             公司信息字典
         """
         try:
-            output = obb.equity.profile(
-                symbol=symbol,
-                provider=self.provider
-            )
-            df = output.to_dataframe()
+            if HAS_OPENBB:
+                output = obb.equity.profile(
+                    symbol=symbol,
+                    provider=self.provider
+                )
+                df = output.to_dataframe()
 
-            if df.empty:
-                return {}
+                if df.empty:
+                    return {}
 
-            info = df.iloc[0].to_dict()
+                info = df.iloc[0].to_dict()
+            else:
+                # 使用yfinance作为fallback
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+
             return {
                 'symbol': symbol,
-                'name': info.get('name', info.get('long_name', '')),
+                'name': info.get('name', info.get('longName', info.get('shortName', ''))),
                 'sector': info.get('sector', ''),
                 'industry': info.get('industry', ''),
-                'market_cap': info.get('market_cap', 0),
+                'market_cap': info.get('market_cap', info.get('marketCap', 0)),
                 'currency': info.get('currency', 'USD'),
                 'exchange': info.get('exchange', ''),
                 'country': info.get('country', ''),
                 'website': info.get('website', ''),
-                'description': info.get('description', info.get('long_business_summary', ''))
+                'description': info.get('description', info.get('longBusinessSummary', ''))
             }
 
         except Exception as e:
@@ -288,14 +324,21 @@ class OpenBBFetcher:
         try:
             end_date = end_date or datetime.now().strftime("%Y-%m-%d")
 
-            output = obb.index.price.historical(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                provider=self.provider
-            )
+            if HAS_OPENBB:
+                output = obb.index.price.historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    provider=self.provider
+                )
+                df = output.to_dataframe()
+            else:
+                # 使用yfinance作为fallback
+                ticker = yf.Ticker(symbol)
+                df = ticker.history(start=start_date, end=end_date)
+                df = df.reset_index()
+                df.columns = [c.lower().replace(' ', '_') for c in df.columns]
 
-            df = output.to_dataframe()
             df = self._standardize_columns(df)
             df['symbol'] = symbol
 
@@ -338,6 +381,11 @@ class OpenBBFetcher:
             新闻DataFrame
         """
         try:
+            if not HAS_OPENBB:
+                # yfinance doesn't have a news API, return empty
+                logger.warning("新闻功能需要OpenBB支持")
+                return pd.DataFrame()
+
             if symbols:
                 if isinstance(symbols, list):
                     symbols = ",".join(symbols)
@@ -465,14 +513,21 @@ class OpenBBFetcher:
         try:
             end_date = end_date or datetime.now().strftime("%Y-%m-%d")
 
-            output = obb.etf.historical(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                provider=self.provider
-            )
+            if HAS_OPENBB:
+                output = obb.etf.historical(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    provider=self.provider
+                )
+                df = output.to_dataframe()
+            else:
+                # 使用yfinance作为fallback (ETF和股票API相同)
+                ticker = yf.Ticker(symbol)
+                df = ticker.history(start=start_date, end=end_date)
+                df = df.reset_index()
+                df.columns = [c.lower().replace(' ', '_') for c in df.columns]
 
-            df = output.to_dataframe()
             df = self._standardize_columns(df)
             df['symbol'] = symbol
 

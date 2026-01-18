@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import pandas as pd
+import numpy as np
 
 from app.core.database import get_session
 from app.services.data.fetcher import OpenBBFetcher
@@ -152,8 +153,7 @@ async def get_providers():
 async def get_stocks(
     search: Optional[str] = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    session: AsyncSession = Depends(get_session)
+    page_size: int = Query(20, ge=1, le=100)
 ):
     """获取股票列表"""
     stocks = [
@@ -189,8 +189,7 @@ async def get_stock_data(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     interval: str = "1d",
-    provider: str = "yfinance",
-    session: AsyncSession = Depends(get_session)
+    provider: str = "yfinance"
 ):
     """获取单只股票历史数据 (OpenBB)"""
     try:
@@ -205,6 +204,8 @@ async def get_stock_data(
         if df.empty:
             raise HTTPException(status_code=404, detail=f"未找到 {symbol} 的数据")
 
+        # Replace NaN values with None for JSON serialization
+        df = df.fillna(0)  # or use df.where(pd.notnull(df), None) for None values
         data = df.reset_index().to_dict(orient="records")
 
         # 处理日期序列化
@@ -212,6 +213,9 @@ async def get_stock_data(
             for key, value in record.items():
                 if isinstance(value, (pd.Timestamp, datetime)):
                     record[key] = value.isoformat()
+                # Handle any remaining float NaN/Inf
+                elif isinstance(value, float) and (pd.isna(value) or np.isinf(value)):
+                    record[key] = 0
 
         return {
             "symbol": symbol,

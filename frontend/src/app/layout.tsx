@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "@/styles/globals.css";
+import { Providers } from "@/components/providers";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,9 +27,11 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="dark">
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans`}>
-        <div className="min-h-screen bg-mesh">
-          {children}
-        </div>
+        <Providers>
+          <div className="min-h-screen bg-mesh">
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );

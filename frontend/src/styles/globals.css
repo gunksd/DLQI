@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #f8fafc;
+  --background-start: #0f172a;
+  --background-end: #1e293b;
+  --card-bg: rgba(30, 41, 59, 0.8);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --neon-blue: #00f5ff;
+  --neon-purple: #bf00ff;
+  --neon-green: #00ff88;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-950 text-slate-100 antialiased;
+    background: linear-gradient(135deg, var(--background-start) 0%, var(--background-end) 50%, var(--background-start) 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* Claymorphism 卡片 */
+  .clay-card {
+    @apply bg-dark-800/80 rounded-clay p-6 shadow-clay backdrop-blur-sm;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+  }
+
+  .clay-card:hover {
+    @apply shadow-clay-lg;
+    transform: translateY(-2px);
+  }
+
+  /* Claymorphism 按钮 */
+  .clay-button {
+    @apply px-6 py-3 rounded-clay-sm font-semibold shadow-clay-sm;
+    @apply bg-gradient-to-br from-primary-600 to-primary-700;
+    @apply hover:shadow-clay hover:from-primary-500 hover:to-primary-600;
+    @apply active:shadow-clay-inset active:transform active:scale-[0.98];
+    @apply transition-all duration-200;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .clay-button-secondary {
+    @apply px-6 py-3 rounded-clay-sm font-semibold shadow-clay-sm;
+    @apply bg-gradient-to-br from-dark-700 to-dark-800;
+    @apply hover:shadow-clay hover:from-dark-600 hover:to-dark-700;
+    @apply active:shadow-clay-inset active:transform active:scale-[0.98];
+    @apply transition-all duration-200;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* 霓虹按钮 */
+  .neon-button {
+    @apply px-6 py-3 rounded-clay-sm font-bold;
+    @apply bg-transparent border-2 border-neon-blue text-neon-blue;
+    @apply hover:bg-neon-blue/10 hover:shadow-neon-blue;
+    @apply transition-all duration-300;
+  }
+
+  .neon-button-purple {
+    @apply px-6 py-3 rounded-clay-sm font-bold;
+    @apply bg-transparent border-2 border-neon-purple text-neon-purple;
+    @apply hover:bg-neon-purple/10 hover:shadow-neon-purple;
+    @apply transition-all duration-300;
+  }
+
+  /* 玻璃态面板 */
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-md rounded-clay p-6;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* 数据卡片 */
+  .stat-card {
+    @apply clay-card flex flex-col items-center justify-center text-center;
+    min-height: 140px;
+  }
+
+  .stat-card .value {
+    @apply text-3xl font-bold bg-gradient-to-r from-neon-blue to-neon-purple bg-clip-text text-transparent;
+  }
+
+  .stat-card .label {
+    @apply text-sm text-slate-400 mt-2;
+  }
+
+  /* 趋势指示器 */
+  .trend-up {
+    @apply text-neon-green;
+  }
+
+  .trend-down {
+    @apply text-red-400;
+  }
+
+  /* 输入框 */
+  .clay-input {
+    @apply w-full px-4 py-3 rounded-clay-sm bg-dark-900/50;
+    @apply border border-dark-600 focus:border-primary-500;
+    @apply shadow-clay-inset focus:shadow-neon-blue/20;
+    @apply text-slate-100 placeholder-slate-500;
+    @apply outline-none transition-all duration-200;
+  }
+
+  /* 选择框 */
+  .clay-select {
+    @apply clay-input appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+  }
+
+  /* 滑块 */
+  .clay-slider {
+    @apply w-full h-2 rounded-full bg-dark-700 cursor-pointer;
+    -webkit-appearance: none;
+  }
+
+  .clay-slider::-webkit-slider-thumb {
+    @apply w-5 h-5 rounded-full bg-primary-500 shadow-neon-blue;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+
+  /* 表格样式 */
+  .clay-table {
+    @apply w-full border-collapse;
+  }
+
+  .clay-table th {
+    @apply px-4 py-3 text-left text-sm font-semibold text-slate-300 bg-dark-800/50 border-b border-dark-600;
+  }
+
+  .clay-table td {
+    @apply px-4 py-3 text-sm text-slate-300 border-b border-dark-700/50;
+  }
+
+  .clay-table tr:hover td {
+    @apply bg-dark-800/30;
+  }
+
+  /* 标签页 */
+  .clay-tabs {
+    @apply flex gap-2 p-1 bg-dark-800/50 rounded-clay-sm;
+  }
+
+  .clay-tab {
+    @apply px-4 py-2 rounded-clay-sm text-sm font-medium transition-all;
+    @apply text-slate-400 hover:text-slate-200;
+  }
+
+  .clay-tab.active {
+    @apply bg-primary-600 text-white shadow-clay-sm;
+  }
+
+  /* 进度条 */
+  .clay-progress {
+    @apply w-full h-3 rounded-full bg-dark-700 overflow-hidden;
+  }
+
+  .clay-progress-bar {
+    @apply h-full rounded-full bg-gradient-to-r from-primary-500 to-neon-blue;
+    transition: width 0.5s ease;
+  }
+
+  /* 徽章 */
+  .clay-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .clay-badge-success {
+    @apply clay-badge bg-neon-green/20 text-neon-green;
+  }
+
+  .clay-badge-warning {
+    @apply clay-badge bg-yellow-500/20 text-yellow-400;
+  }
+
+  .clay-badge-danger {
+    @apply clay-badge bg-red-500/20 text-red-400;
+  }
+
+  .clay-badge-info {
+    @apply clay-badge bg-neon-blue/20 text-neon-blue;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 20px currentColor;
+  }
+
+  .bg-mesh {
+    background:
+      linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+      linear-gradient(225deg, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+      linear-gradient(315deg, rgba(14, 165, 233, 0.1) 0%, transparent 50%);
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 自定义滚动条 */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-dark-800 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-dark-600 rounded-full hover:bg-dark-500;
+  }
+}
+
+/* Chart.js 自定义样式 */
+.chart-container {
+  @apply w-full h-full min-h-[300px] p-4;
+}
+
+/* 动画延迟工具类 */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }

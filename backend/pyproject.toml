@@ -1,0 +1,58 @@
+[tool.poetry]
+name = "dlqi-backend"
+version = "0.1.0"
+description = "机器学习量化交易系统后端"
+authors = ["Graduate Student <student@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = {extras = ["all"], version = "^0.109.0"}
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+pandas = "^2.1.4"
+numpy = "^1.26.3"
+torch = "^2.1.2"
+xgboost = "^2.0.3"
+lightgbm = "^4.2.0"
+scikit-learn = "^1.4.0"
+tushare = "^1.4.4"
+yfinance = "^0.2.35"
+backtrader = "^1.9.78"
+sqlalchemy = "^2.0.25"
+redis = "^5.0.1"
+pydantic = "^2.5.3"
+python-dotenv = "^1.0.0"
+loguru = "^0.7.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.3"
+pytest-cov = "^4.1.0"
+black = "^23.12.1"
+ruff = "^0.1.11"
+mypy = "^1.8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=app --cov-report=html --cov-report=term"
+testpaths = ["tests"]

@@ -55,7 +55,7 @@ export function OptimizationProgress({
       xAxis: {
         type: "category",
         name: "Trial",
-        nameLocation: "center",
+        nameLocation: "middle" as const,
         nameGap: 25,
         nameTextStyle: { color: "#94a3b8" },
         data: data.trials,
@@ -66,7 +66,7 @@ export function OptimizationProgress({
       yAxis: {
         type: "value",
         name: "夏普比率",
-        nameLocation: "center",
+        nameLocation: "middle" as const,
         nameGap: 35,
         nameTextStyle: { color: "#94a3b8" },
         axisLine: { lineStyle: { color: "#334155" } },

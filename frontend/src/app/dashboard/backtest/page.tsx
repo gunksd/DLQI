@@ -1,65 +1,89 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
   TrendingUp,
   TrendingDown,
-  Calendar,
-  Play,
-  Pause,
   RefreshCw,
-  Download,
-  Settings,
   Clock,
   Target,
   Activity,
-  DollarSign,
   Percent,
   ArrowUpRight,
   ArrowDownRight,
-  Filter
 } from "lucide-react";
+import api from "@/lib/api";
 
-// 回测汇总卡片
-function BacktestSummaryCard({
-  title,
-  value,
-  change,
-  changeType,
-  icon: Icon,
-  delay = 0,
+// ==================== 类型定义 ====================
+
+interface BacktestResult {
+  id: number;
+  model_id: string;
+  model_type: string;
+  symbol: string;
+  total_return: number | null;
+  annual_return: number | null;
+  volatility: number | null;
+  max_drawdown: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  calmar_ratio: number | null;
+  direction_accuracy: number | null;
+  win_rate: number | null;
+  profit_factor: number | null;
+  n_trades: number;
+  benchmark_return: number | null;
+  excess_return: number | null;
+}
+
+interface BacktestSummary {
+  summary: Record<string, {
+    count: number;
+    avg_sharpe: number | null;
+    avg_return: number | null;
+    avg_direction_accuracy: number | null;
+  }>;
+  best_models: BacktestResult[];
+}
+
+interface HeatmapData {
+  symbols: string[];
+  model_types: string[];
+  data: Array<{
+    model_type: string;
+    symbol: string;
+    sharpe_ratio: number;
+    total_return: number;
+    direction_accuracy: number;
+  }>;
+}
+
+// ==================== 汇总卡片 ====================
+
+function SummaryCard({
+  title, value, subtitle, changeType, icon: Icon, delay = 0,
 }: {
-  title: string;
-  value: string;
-  change?: string;
-  changeType?: "up" | "down" | "neutral";
-  icon: React.ElementType;
-  delay?: number;
+  title: string; value: string; subtitle?: string;
+  changeType?: "up" | "down" | "neutral"; icon: React.ElementType; delay?: number;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }}
-      className="clay-card"
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay }} className="clay-card"
     >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-slate-400 mb-1">{title}</p>
           <h3 className="text-2xl font-bold text-slate-100">{value}</h3>
-          {change && (
+          {subtitle && (
             <div className={`flex items-center gap-1 mt-2 text-sm ${
-              changeType === "up" ? "text-neon-green" :
-              changeType === "down" ? "text-red-400" : "text-slate-400"
+              changeType === "up" ? "text-neon-green" : changeType === "down" ? "text-red-400" : "text-slate-400"
             }`}>
-              {changeType === "up" ? (
-                <ArrowUpRight className="w-4 h-4" />
-              ) : changeType === "down" ? (
-                <ArrowDownRight className="w-4 h-4" />
-              ) : null}
-              <span>{change}</span>
+              {changeType === "up" ? <ArrowUpRight className="w-4 h-4" /> :
+               changeType === "down" ? <ArrowDownRight className="w-4 h-4" /> : null}
+              <span>{subtitle}</span>
             </div>
           )}
         </div>
@@ -71,229 +95,119 @@ function BacktestSummaryCard({
   );
 }
 
-// 回测配置面板
-function BacktestConfig() {
-  return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">回测配置</h3>
-      <div className="grid md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">开始日期</label>
-          <input
-            type="date"
-            defaultValue="2023-01-01"
-            className="clay-input"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">结束日期</label>
-          <input
-            type="date"
-            defaultValue="2025-01-18"
-            className="clay-input"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">初始资金</label>
-          <input
-            type="number"
-            defaultValue="1000000"
-            className="clay-input"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">手续费率</label>
-          <input
-            type="number"
-            defaultValue="0.0003"
-            step="0.0001"
-            className="clay-input"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">策略选择</label>
-          <select className="clay-select">
-            <option>LSTM 趋势跟踪</option>
-            <option>LightGBM 多因子</option>
-            <option>模型集成策略</option>
-            <option>动量反转组合</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-slate-400 mb-2">基准指数</label>
-          <select className="clay-select">
-            <option>沪深300</option>
-            <option>标普500</option>
-            <option>纳斯达克100</option>
-          </select>
-        </div>
-      </div>
-      <div className="flex gap-3 mt-6">
-        <button className="flex-1 clay-button flex items-center justify-center gap-2">
-          <Play className="w-4 h-4" />
-          运行回测
-        </button>
-        <button className="clay-button-secondary !px-4">
-          <Settings className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
+// ==================== 回测结果表格 ====================
 
-// 收益曲线图
-function EquityCurveChart() {
+function ResultsTable({ results, selectedSymbol, setSelectedSymbol, symbols }: {
+  results: BacktestResult[];
+  selectedSymbol: string;
+  setSelectedSymbol: (s: string) => void;
+  symbols: string[];
+}) {
+  const filtered = selectedSymbol
+    ? results.filter((r) => r.symbol === selectedSymbol)
+    : results;
+
   return (
     <div className="clay-card">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">收益曲线</h3>
-        <div className="flex items-center gap-2">
-          <button className="clay-tab active">累计收益</button>
-          <button className="clay-tab">日收益</button>
-          <button className="clay-tab">月收益</button>
-        </div>
+        <h3 className="text-lg font-semibold text-slate-100">全部回测结果</h3>
+        <select
+          className="clay-select !py-2 !px-3 text-sm w-32"
+          value={selectedSymbol}
+          onChange={(e) => setSelectedSymbol(e.target.value)}
+        >
+          <option value="">全部</option>
+          {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
-      <div className="h-80 bg-gradient-to-br from-dark-800 to-dark-900 rounded-clay-sm flex items-center justify-center">
-        <div className="text-center">
-          <TrendingUp className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-          <p className="text-slate-500 text-sm">收益曲线图表</p>
-          <p className="text-slate-600 text-xs mt-1">策略 vs 基准</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-6 mt-4 pt-4 border-t border-dark-700">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-1 rounded-full bg-neon-blue"></div>
-          <span className="text-sm text-slate-400">策略收益 +85.2%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-1 rounded-full bg-slate-500"></div>
-          <span className="text-sm text-slate-400">基准收益 +32.5%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-1 rounded-full bg-neon-green"></div>
-          <span className="text-sm text-slate-400">超额收益 +52.7%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// 月度收益热力图
-function MonthlyReturnsHeatmap() {
-  const years = ["2023", "2024", "2025"];
-  const months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-
-  const returns: { [key: string]: number[] } = {
-    "2023": [2.3, -1.5, 3.2, 1.8, -0.5, 2.1, 3.5, -2.1, 1.5, 4.2, 2.8, 1.2],
-    "2024": [1.5, 2.8, -1.2, 3.5, 2.1, -0.8, 1.8, 3.2, 2.5, -1.5, 2.2, 3.8],
-    "2025": [2.5, null, null, null, null, null, null, null, null, null, null, null],
-  };
-
-  const getColor = (value: number | null) => {
-    if (value === null) return "bg-dark-700";
-    if (value >= 3) return "bg-neon-green";
-    if (value >= 1) return "bg-neon-green/60";
-    if (value >= 0) return "bg-neon-green/30";
-    if (value >= -2) return "bg-red-500/50";
-    return "bg-red-500";
-  };
-
-  return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">月度收益热力图</h3>
       <div className="overflow-x-auto">
-        <div className="inline-block">
-          <div className="flex">
-            <div className="w-12"></div>
-            {months.map((month) => (
-              <div key={month} className="w-12 text-center text-xs text-slate-400 py-2">
-                {month}
-              </div>
+        <table className="clay-table">
+          <thead>
+            <tr>
+              <th>模型</th>
+              <th>股票</th>
+              <th>年化收益</th>
+              <th>夏普</th>
+              <th>Sortino</th>
+              <th>最大回撤</th>
+              <th>方向准确率</th>
+              <th>交易次数</th>
+              <th>超额收益</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => (
+              <tr key={r.model_id}>
+                <td className="font-medium text-slate-200">{r.model_type.toUpperCase()}</td>
+                <td>{r.symbol}</td>
+                <td className={`${(r.annual_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
+                  {r.annual_return != null ? `${(r.annual_return * 100).toFixed(1)}%` : "-"}
+                </td>
+                <td className="text-neon-blue">
+                  {r.sharpe_ratio != null ? r.sharpe_ratio.toFixed(2) : "-"}
+                </td>
+                <td className="text-cyan-400">
+                  {r.sortino_ratio != null ? r.sortino_ratio.toFixed(2) : "-"}
+                </td>
+                <td className="text-red-400">
+                  {r.max_drawdown != null ? `${(r.max_drawdown * 100).toFixed(1)}%` : "-"}
+                </td>
+                <td className="text-yellow-400">
+                  {r.direction_accuracy != null ? `${(r.direction_accuracy * 100).toFixed(1)}%` : "-"}
+                </td>
+                <td>{r.n_trades}</td>
+                <td className={`${(r.excess_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
+                  {r.excess_return != null ? `${(r.excess_return * 100).toFixed(1)}%` : "-"}
+                </td>
+              </tr>
             ))}
-            <div className="w-16 text-center text-xs text-slate-400 py-2">年度</div>
-          </div>
-          {years.map((year) => {
-            const yearReturns = returns[year].filter((r): r is number => r !== null);
-            const yearTotal = yearReturns.reduce((a, b) => a + b, 0);
-            return (
-              <div key={year} className="flex items-center">
-                <div className="w-12 text-xs text-slate-400 pr-2 text-right">{year}</div>
-                {returns[year].map((ret, j) => (
-                  <div
-                    key={j}
-                    className={`w-12 h-10 flex items-center justify-center text-xs font-medium ${getColor(ret)} ${
-                      ret !== null ? "text-white" : "text-slate-600"
-                    }`}
-                  >
-                    {ret !== null ? `${ret > 0 ? "+" : ""}${ret}%` : "-"}
-                  </div>
-                ))}
-                <div className={`w-16 h-10 flex items-center justify-center text-xs font-bold ${
-                  yearTotal >= 0 ? "text-neon-green" : "text-red-400"
-                }`}>
-                  {yearTotal > 0 ? "+" : ""}{yearTotal.toFixed(1)}%
-                </div>
-              </div>
-            );
-          })}
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-// 详细绩效指标
-function DetailedMetrics() {
-  const metrics = [
-    { category: "收益指标", items: [
-      { name: "总收益率", value: "85.2%", benchmark: "32.5%" },
-      { name: "年化收益率", value: "18.5%", benchmark: "7.2%" },
-      { name: "超额收益Alpha", value: "11.3%", benchmark: "-" },
-      { name: "月均收益", value: "1.42%", benchmark: "0.58%" },
-    ]},
-    { category: "风险指标", items: [
-      { name: "年化波动率", value: "15.8%", benchmark: "18.2%" },
-      { name: "最大回撤", value: "-12.3%", benchmark: "-25.6%" },
-      { name: "VaR(95%)", value: "-2.5%", benchmark: "-3.2%" },
-      { name: "下行风险", value: "8.5%", benchmark: "12.3%" },
-    ]},
-    { category: "风险调整指标", items: [
-      { name: "夏普比率", value: "1.42", benchmark: "0.58" },
-      { name: "索提诺比率", value: "1.85", benchmark: "0.72" },
-      { name: "卡玛比率", value: "1.50", benchmark: "0.28" },
-      { name: "信息比率", value: "1.25", benchmark: "-" },
-    ]},
-    { category: "交易指标", items: [
-      { name: "总交易次数", value: "1,245", benchmark: "-" },
-      { name: "胜率", value: "56.8%", benchmark: "-" },
-      { name: "盈亏比", value: "1.52", benchmark: "-" },
-      { name: "平均持仓天数", value: "5.2", benchmark: "-" },
-    ]},
-  ];
+// ==================== 模型类型对比 ====================
+
+function ModelTypeSummary({ summary }: { summary: BacktestSummary["summary"] }) {
+  const types = Object.entries(summary);
+  if (types.length === 0) return null;
+
+  const typeNames: Record<string, string> = {
+    lstm: "LSTM", transformer: "Transformer",
+    lightgbm: "LightGBM", xgboost: "XGBoost",
+  };
 
   return (
     <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">详细绩效指标</h3>
-        <button className="clay-button-secondary !px-3 !py-2 text-sm flex items-center gap-1">
-          <Download className="w-4 h-4" />
-          导出报告
-        </button>
-      </div>
-      <div className="grid md:grid-cols-2 gap-6">
-        {metrics.map((group) => (
-          <div key={group.category}>
-            <h4 className="text-sm font-medium text-slate-400 mb-3">{group.category}</h4>
-            <div className="space-y-2">
-              {group.items.map((item) => (
-                <div key={item.name} className="flex items-center justify-between p-2 rounded-clay-sm bg-dark-800/50">
-                  <span className="text-slate-300">{item.name}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="font-medium text-neon-green">{item.value}</span>
-                    <span className="text-slate-500 text-sm w-16 text-right">{item.benchmark}</span>
-                  </div>
-                </div>
-              ))}
+      <h3 className="text-lg font-semibold text-slate-100 mb-4">模型类型对比</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {types.map(([type, stats]) => (
+          <div key={type} className="p-4 rounded-clay-sm bg-dark-800/50 text-center">
+            <div className="text-lg font-bold text-slate-100 mb-2">
+              {typeNames[type] || type}
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-slate-500">平均夏普: </span>
+                <span className="text-neon-blue font-medium">
+                  {stats.avg_sharpe?.toFixed(2) || "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500">平均收益: </span>
+                <span className={`font-medium ${(stats.avg_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
+                  {stats.avg_return != null ? `${(stats.avg_return * 100).toFixed(1)}%` : "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500">方向准确: </span>
+                <span className="text-yellow-400 font-medium">
+                  {stats.avg_direction_accuracy != null ? `${(stats.avg_direction_accuracy * 100).toFixed(1)}%` : "N/A"}
+                </span>
+              </div>
             </div>
           </div>
         ))}
@@ -302,133 +216,218 @@ function DetailedMetrics() {
   );
 }
 
-// 回撤分析图
-function DrawdownChart() {
+// ==================== Sharpe 热力图 ====================
+
+function SharpeHeatmap({ data }: { data: HeatmapData }) {
+  if (!data.symbols.length) return null;
+
+  const getColor = (sharpe: number) => {
+    if (sharpe >= 2) return "bg-neon-green";
+    if (sharpe >= 1) return "bg-neon-green/60";
+    if (sharpe >= 0.5) return "bg-yellow-400/50";
+    if (sharpe >= 0) return "bg-orange-400/40";
+    return "bg-red-500/50";
+  };
+
+  const getValue = (mt: string, sym: string) => {
+    const item = data.data.find((d) => d.model_type === mt && d.symbol === sym);
+    return item?.sharpe_ratio || 0;
+  };
+
+  const typeNames: Record<string, string> = {
+    lstm: "LSTM", transformer: "Transformer",
+    lightgbm: "LightGBM", xgboost: "XGBoost",
+  };
+
   return (
     <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">回撤分析</h3>
-      <div className="h-48 bg-gradient-to-br from-dark-800 to-dark-900 rounded-clay-sm flex items-center justify-center">
-        <div className="text-center">
-          <TrendingDown className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-          <p className="text-slate-500 text-sm">回撤走势图</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-dark-700">
-        <div className="text-center">
-          <div className="text-xl font-bold text-red-400">-12.3%</div>
-          <div className="text-xs text-slate-500">最大回撤</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xl font-bold text-yellow-400">18天</div>
-          <div className="text-xs text-slate-500">最长回撤期</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xl font-bold text-neon-green">15天</div>
-          <div className="text-xs text-slate-500">恢复时间</div>
+      <h3 className="text-lg font-semibold text-slate-100 mb-4">Sharpe 热力图</h3>
+      <div className="overflow-x-auto">
+        <div className="inline-block">
+          <div className="flex">
+            <div className="w-24"></div>
+            {data.symbols.map((s) => (
+              <div key={s} className="w-20 text-center text-xs text-slate-400 py-2">{s}</div>
+            ))}
+          </div>
+          {data.model_types.map((mt) => (
+            <div key={mt} className="flex items-center">
+              <div className="w-24 text-xs text-slate-400 pr-2 text-right">
+                {typeNames[mt] || mt}
+              </div>
+              {data.symbols.map((sym) => {
+                const val = getValue(mt, sym);
+                return (
+                  <div
+                    key={sym}
+                    className={`w-20 h-12 flex items-center justify-center text-xs font-medium ${getColor(val)} text-white`}
+                  >
+                    {val.toFixed(2)}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-// 交易分布
-function TradeDistribution() {
+// ==================== 最佳模型 ====================
+
+function BestModels({ models }: { models: BacktestResult[] }) {
+  if (models.length === 0) return null;
+
   return (
     <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">收益分布</h3>
-      <div className="h-48 bg-gradient-to-br from-dark-800 to-dark-900 rounded-clay-sm flex items-center justify-center">
-        <div className="text-center">
-          <BarChart3 className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-          <p className="text-slate-500 text-sm">收益分布直方图</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-dark-700">
-        <div>
-          <div className="text-xs text-slate-500 mb-1">平均盈利</div>
-          <div className="text-lg font-bold text-neon-green">+2.35%</div>
-        </div>
-        <div>
-          <div className="text-xs text-slate-500 mb-1">平均亏损</div>
-          <div className="text-lg font-bold text-red-400">-1.55%</div>
-        </div>
+      <h3 className="text-lg font-semibold text-slate-100 mb-4">Top 5 最佳模型（按 Sharpe）</h3>
+      <div className="space-y-3">
+        {models.map((m, i) => (
+          <div key={m.model_id} className="flex items-center justify-between p-3 rounded-clay-sm bg-dark-800/50">
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                i === 0 ? "bg-yellow-400/20 text-yellow-400" :
+                i === 1 ? "bg-slate-300/20 text-slate-300" :
+                i === 2 ? "bg-orange-400/20 text-orange-400" :
+                "bg-dark-700 text-slate-400"
+              }`}>
+                {i + 1}
+              </div>
+              <div>
+                <div className="font-medium text-slate-200">
+                  {m.model_type.toUpperCase()} - {m.symbol}
+                </div>
+                <div className="text-xs text-slate-500">
+                  收益 {m.total_return != null ? `${(m.total_return * 100).toFixed(1)}%` : "N/A"}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-neon-blue font-bold">
+                Sharpe {m.sharpe_ratio?.toFixed(2) || "N/A"}
+              </div>
+              <div className="text-xs text-slate-500">
+                方向 {m.direction_accuracy != null ? `${(m.direction_accuracy * 100).toFixed(1)}%` : "N/A"}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+
+// ==================== 主页面 ====================
 
 export default function BacktestPage() {
+  const [results, setResults] = useState<BacktestResult[]>([]);
+  const [summary, setSummary] = useState<BacktestSummary | null>(null);
+  const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [symbols, setSymbols] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [resultsRes, summaryRes, heatmapRes] = await Promise.all([
+          api.get<{ items: BacktestResult[]; total: number }>("/backtest/"),
+          api.get<BacktestSummary>("/backtest/summary"),
+          api.get<HeatmapData>("/backtest/heatmap"),
+        ]);
+        setResults(resultsRes.items);
+        setSummary(summaryRes);
+        setHeatmap(heatmapRes);
+
+        const syms = Array.from(new Set(resultsRes.items.map((r) => r.symbol))).sort();
+        setSymbols(syms);
+      } catch (e: any) {
+        setError(e.message || "加载失败");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <RefreshCw className="w-8 h-8 text-neon-blue animate-spin" />
+        <span className="ml-3 text-slate-400">加载回测数据...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="clay-card text-center py-12">
+        <p className="text-red-400 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="clay-button">重试</button>
+      </div>
+    );
+  }
+
+  // 计算汇总指标
+  const avgSharpe = results.length > 0
+    ? results.reduce((s, r) => s + (r.sharpe_ratio || 0), 0) / results.length : 0;
+  const bestSharpe = results.length > 0
+    ? Math.max(...results.map((r) => r.sharpe_ratio || 0)) : 0;
+  const avgAccuracy = results.length > 0
+    ? results.reduce((s, r) => s + (r.direction_accuracy || 0), 0) / results.length : 0;
+  const avgReturn = results.length > 0
+    ? results.reduce((s, r) => s + (r.total_return || 0), 0) / results.length : 0;
+
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">回测结果</h1>
           <p className="text-slate-400 text-sm mt-1">
-            查看策略回测表现和详细绩效分析
+            {results.length} 条回测记录，{symbols.length} 只股票
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <Clock className="w-4 h-4" />
-          <span>回测周期: 2023-01-01 至 2025-01-18</span>
+          <span>5 只美股 x 4 种模型</span>
         </div>
       </div>
 
       {/* 核心指标 */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <BacktestSummaryCard
-          title="总收益率"
-          value="+85.2%"
-          change="超越基准 +52.7%"
-          changeType="up"
-          icon={TrendingUp}
-          delay={0}
-        />
-        <BacktestSummaryCard
-          title="年化收益"
-          value="18.5%"
-          change="年化复合增长"
-          changeType="up"
-          icon={Percent}
-          delay={0.1}
-        />
-        <BacktestSummaryCard
-          title="夏普比率"
-          value="1.42"
-          change="风险调整后"
-          changeType="up"
-          icon={Target}
-          delay={0.2}
-        />
-        <BacktestSummaryCard
-          title="最大回撤"
-          value="-12.3%"
-          change="在控制范围"
-          changeType="neutral"
-          icon={Activity}
-          delay={0.3}
-        />
+        <SummaryCard title="平均夏普比率" value={avgSharpe.toFixed(2)}
+          subtitle="所有模型均值" changeType={avgSharpe > 1 ? "up" : "neutral"} icon={Target} delay={0} />
+        <SummaryCard title="最佳夏普" value={bestSharpe.toFixed(2)}
+          subtitle="单模型最高" changeType="up" icon={TrendingUp} delay={0.1} />
+        <SummaryCard title="平均方向准确率" value={`${(avgAccuracy * 100).toFixed(1)}%`}
+          subtitle={avgAccuracy > 0.5 ? "高于随机" : "接近随机"} changeType={avgAccuracy > 0.5 ? "up" : "neutral"} icon={Percent} delay={0.2} />
+        <SummaryCard title="平均总收益" value={`${(avgReturn * 100).toFixed(1)}%`}
+          subtitle="全部模型" changeType={avgReturn > 0 ? "up" : "down"} icon={Activity} delay={0.3} />
       </div>
 
+      {/* 模型类型对比 */}
+      {summary && <ModelTypeSummary summary={summary.summary} />}
+
+      {/* Sharpe 热力图 */}
+      {heatmap && <SharpeHeatmap data={heatmap} />}
+
+      {/* Top 5 + 回测结果表格 */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* 回测配置 */}
-        <BacktestConfig />
-
-        {/* 收益曲线 */}
-        <div className="lg:col-span-2">
-          <EquityCurveChart />
+        <div>
+          {summary && <BestModels models={summary.best_models} />}
         </div>
-      </div>
-
-      {/* 月度收益 */}
-      <MonthlyReturnsHeatmap />
-
-      {/* 详细指标 */}
-      <DetailedMetrics />
-
-      {/* 回撤和分布 */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <DrawdownChart />
-        <TradeDistribution />
+        <div className="lg:col-span-2">
+          <ResultsTable
+            results={results}
+            selectedSymbol={selectedSymbol}
+            setSelectedSymbol={setSelectedSymbol}
+            symbols={symbols}
+          />
+        </div>
       </div>
     </div>
   );

@@ -11,9 +11,15 @@ import pandas as pd
 import numpy as np
 
 from app.core.database import get_session
-from app.services.data.fetcher import OpenBBFetcher
-from app.services.data.cleaner import DataCleaner
-from app.services.features.indicators import TechnicalIndicators
+
+try:
+    from app.services.data.fetcher import OpenBBFetcher
+    from app.services.data.cleaner import DataCleaner
+    from app.services.features.indicators import TechnicalIndicators
+except ImportError:
+    OpenBBFetcher = None
+    DataCleaner = None
+    TechnicalIndicators = None
 
 
 router = APIRouter()

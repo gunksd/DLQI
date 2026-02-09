@@ -81,7 +81,7 @@ export function ROCCurve({ data, height = 350 }: ROCCurveProps) {
       xAxis: {
         type: "value",
         name: "假阳性率 (FPR)",
-        nameLocation: "center",
+        nameLocation: "middle" as const,
         nameGap: 25,
         nameTextStyle: { color: "#94a3b8" },
         min: 0,
@@ -93,7 +93,7 @@ export function ROCCurve({ data, height = 350 }: ROCCurveProps) {
       yAxis: {
         type: "value",
         name: "真阳性率 (TPR)",
-        nameLocation: "center",
+        nameLocation: "middle" as const,
         nameGap: 35,
         nameTextStyle: { color: "#94a3b8" },
         min: 0,

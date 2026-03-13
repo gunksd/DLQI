@@ -1,0 +1,276 @@
+{
+  "generated_at": "2026-03-13T15:11:38.670346",
+  "total_models": 20,
+  "active_trading_models": 19,
+  "passive_models": 1,
+  "best_model": {
+    "model_id": "lightgbm_NVDA_20260209_162016",
+    "model_type": "lightgbm",
+    "symbol": "NVDA",
+    "sharpe_ratio": 2.5743,
+    "total_return": 1.2384,
+    "annual_return": 1.3727,
+    "max_drawdown": -0.2705,
+    "direction_accuracy": 0.5447,
+    "win_rate": 0.0,
+    "n_trades": 1,
+    "excess_return": -0.0029,
+    "advantages": [
+      "高风险调整收益 (Sharpe 2.57)",
+      "方向预测准确 (54.5%)"
+    ],
+    "why_best": "LightGBM 梯度提升树擅长捕捉非线性特征交互。它不需要序列化输入，直接使用展平的 60×12=720 维特征矩阵，信息利用更充分。训练速度快，内置正则化（L1/L2 + feature/bagging subsampling），在 ~1200 条数据的小样本上不易过拟合，优于深度学习模型。特征重要性可解释，MACD 和 RSI 贡献最大。"
+  },
+  "by_model_type": {
+    "lightgbm": {
+      "avg_sharpe": 0.8953,
+      "avg_return": 0.3394,
+      "avg_direction_accuracy": 0.5464,
+      "avg_max_drawdown": -0.2161,
+      "model_count": 5
+    },
+    "lstm": {
+      "avg_sharpe": 0.8418,
+      "avg_return": 0.2779,
+      "avg_direction_accuracy": 0.4757,
+      "avg_max_drawdown": -0.0926,
+      "model_count": 5
+    },
+    "transformer": {
+      "avg_sharpe": 0.4359,
+      "avg_return": 0.0791,
+      "avg_direction_accuracy": 0.4715,
+      "avg_max_drawdown": -0.1293,
+      "model_count": 5
+    },
+    "xgboost": {
+      "avg_sharpe": 1.2661,
+      "avg_return": 0.3114,
+      "avg_direction_accuracy": 0.5055,
+      "avg_max_drawdown": -0.1481,
+      "model_count": 5
+    }
+  },
+  "rankings": [
+    {
+      "model_id": "lstm_NVDA_20260209_162101",
+      "model_type": "lstm",
+      "symbol": "NVDA",
+      "sharpe_ratio": 2.5743,
+      "total_return": 1.2384,
+      "max_drawdown": -0.2705,
+      "direction_accuracy": 0.5447,
+      "n_trades": 1,
+      "excess_return": -0.0029
+    },
+    {
+      "model_id": "lightgbm_NVDA_20260209_162016",
+      "model_type": "lightgbm",
+      "symbol": "NVDA",
+      "sharpe_ratio": 2.5743,
+      "total_return": 1.2384,
+      "max_drawdown": -0.2705,
+      "direction_accuracy": 0.5447,
+      "n_trades": 1,
+      "excess_return": -0.0029
+    },
+    {
+      "model_id": "xgboost_NVDA_20260209_162011",
+      "model_type": "xgboost",
+      "symbol": "NVDA",
+      "sharpe_ratio": 2.5632,
+      "total_return": 0.9643,
+      "max_drawdown": -0.1567,
+      "direction_accuracy": 0.4894,
+      "n_trades": 92,
+      "excess_return": -0.277
+    },
+    {
+      "model_id": "lightgbm_AAPL_20260209_161618",
+      "model_type": "lightgbm",
+      "symbol": "AAPL",
+      "sharpe_ratio": 1.4484,
+      "total_return": 0.3013,
+      "max_drawdown": -0.1517,
+      "direction_accuracy": 0.5745,
+      "n_trades": 1,
+      "excess_return": -0.0017
+    },
+    {
+      "model_id": "xgboost_AAPL_20260209_161614",
+      "model_type": "xgboost",
+      "symbol": "AAPL",
+      "sharpe_ratio": 1.3095,
+      "total_return": 0.1737,
+      "max_drawdown": -0.1389,
+      "direction_accuracy": 0.4723,
+      "n_trades": 60,
+      "excess_return": -0.1293
+    },
+    {
+      "model_id": "xgboost_MSFT_20260209_162125",
+      "model_type": "xgboost",
+      "symbol": "MSFT",
+      "sharpe_ratio": 1.2637,
+      "total_return": 0.1756,
+      "max_drawdown": -0.0782,
+      "direction_accuracy": 0.5234,
+      "n_trades": 87,
+      "excess_return": 0.1124
+    },
+    {
+      "model_id": "lightgbm_GOOGL_20260209_162023",
+      "model_type": "lightgbm",
+      "symbol": "GOOGL",
+      "sharpe_ratio": 1.0985,
+      "total_return": 0.2895,
+      "max_drawdown": -0.2206,
+      "direction_accuracy": 0.5957,
+      "n_trades": 9,
+      "excess_return": -0.0012
+    },
+    {
+      "model_id": "transformer_AMZN_20260209_162043",
+      "model_type": "transformer",
+      "symbol": "AMZN",
+      "sharpe_ratio": 1.0893,
+      "total_return": 0.0842,
+      "max_drawdown": -0.0446,
+      "direction_accuracy": 0.4979,
+      "n_trades": 6,
+      "excess_return": -0.3265
+    },
+    {
+      "model_id": "lstm_AMZN_20260209_162046",
+      "model_type": "lstm",
+      "symbol": "AMZN",
+      "sharpe_ratio": 1.0498,
+      "total_return": 0.0958,
+      "max_drawdown": -0.0376,
+      "direction_accuracy": 0.4766,
+      "n_trades": 2,
+      "excess_return": -0.315
+    },
+    {
+      "model_id": "transformer_AAPL_20260209_161612",
+      "model_type": "transformer",
+      "symbol": "AAPL",
+      "sharpe_ratio": 0.9563,
+      "total_return": 0.1373,
+      "max_drawdown": -0.1206,
+      "direction_accuracy": 0.4681,
+      "n_trades": 27,
+      "excess_return": -0.1657
+    },
+    {
+      "model_id": "xgboost_AMZN_20260209_162018",
+      "model_type": "xgboost",
+      "symbol": "AMZN",
+      "sharpe_ratio": 0.8373,
+      "total_return": 0.1559,
+      "max_drawdown": -0.1445,
+      "direction_accuracy": 0.5021,
+      "n_trades": 89,
+      "excess_return": -0.2549
+    },
+    {
+      "model_id": "transformer_NVDA_20260209_162010",
+      "model_type": "transformer",
+      "symbol": "NVDA",
+      "sharpe_ratio": 0.8358,
+      "total_return": 0.2651,
+      "max_drawdown": -0.1883,
+      "direction_accuracy": 0.4809,
+      "n_trades": 20,
+      "excess_return": -0.9762
+    },
+    {
+      "model_id": "lstm_MSFT_20260209_162151",
+      "model_type": "lstm",
+      "symbol": "MSFT",
+      "sharpe_ratio": 0.7267,
+      "total_return": 0.0729,
+      "max_drawdown": -0.0737,
+      "direction_accuracy": 0.5234,
+      "n_trades": 4,
+      "excess_return": 0.0096
+    },
+    {
+      "model_id": "xgboost_GOOGL_20260209_162122",
+      "model_type": "xgboost",
+      "symbol": "GOOGL",
+      "sharpe_ratio": 0.3567,
+      "total_return": 0.0875,
+      "max_drawdown": -0.2221,
+      "direction_accuracy": 0.5404,
+      "n_trades": 64,
+      "excess_return": -0.2033
+    },
+    {
+      "model_id": "lightgbm_MSFT_20260209_162156",
+      "model_type": "lightgbm",
+      "symbol": "MSFT",
+      "sharpe_ratio": 0.0847,
+      "total_return": 0.0142,
+      "max_drawdown": -0.1571,
+      "direction_accuracy": 0.5532,
+      "n_trades": 69,
+      "excess_return": -0.049
+    },
+    {
+      "model_id": "lstm_GOOGL_20260209_162051",
+      "model_type": "lstm",
+      "symbol": "GOOGL",
+      "sharpe_ratio": 0.0,
+      "total_return": 0.0,
+      "max_drawdown": 0.0,
+      "direction_accuracy": 0.4043,
+      "n_trades": 0,
+      "excess_return": -0.2907
+    },
+    {
+      "model_id": "lstm_AAPL_20260209_161353",
+      "model_type": "lstm",
+      "symbol": "AAPL",
+      "sharpe_ratio": -0.1418,
+      "total_return": -0.0173,
+      "max_drawdown": -0.0814,
+      "direction_accuracy": 0.4298,
+      "n_trades": 4,
+      "excess_return": -0.3203
+    },
+    {
+      "model_id": "transformer_MSFT_20260209_162144",
+      "model_type": "transformer",
+      "symbol": "MSFT",
+      "sharpe_ratio": -0.2327,
+      "total_return": -0.0429,
+      "max_drawdown": -0.1925,
+      "direction_accuracy": 0.5064,
+      "n_trades": 13,
+      "excess_return": -0.1061
+    },
+    {
+      "model_id": "transformer_GOOGL_20260209_162120",
+      "model_type": "transformer",
+      "symbol": "GOOGL",
+      "sharpe_ratio": -0.4695,
+      "total_return": -0.0481,
+      "max_drawdown": -0.1003,
+      "direction_accuracy": 0.4043,
+      "n_trades": 13,
+      "excess_return": -0.3389
+    },
+    {
+      "model_id": "lightgbm_AMZN_20260209_162056",
+      "model_type": "lightgbm",
+      "symbol": "AMZN",
+      "sharpe_ratio": -0.7296,
+      "total_return": -0.1466,
+      "max_drawdown": -0.2806,
+      "direction_accuracy": 0.4638,
+      "n_trades": 107,
+      "excess_return": -0.5573
+    }
+  ]
+}

@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "DLQI - 机器学习量化交易平台",
-  description: "基于机器学习的量化交易策略系统 - 毕业设计展示",
+  description: "基于机器学习的量化交易策略系统",
   keywords: ["量化交易", "机器学习", "LSTM", "金融科技", "回测系统"],
 };
 
@@ -28,9 +28,7 @@ export default function RootLayout({
     <html lang="zh-CN" className="dark">
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans`}>
         <Providers>
-          <div className="min-h-screen bg-mesh">
-            {children}
-          </div>
+          {children}
         </Providers>
       </body>
     </html>

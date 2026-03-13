@@ -1,24 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import {
   Brain,
-  Zap,
   Activity,
-  Target,
   TrendingUp,
-  BarChart3,
   RefreshCw,
-  Download,
   Settings,
   Play,
   CheckCircle,
   Clock,
+  X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-
-// ==================== 类型定义 ====================
 
 interface ModelInfo {
   model_id: string;
@@ -33,7 +28,6 @@ interface ModelInfo {
   data_points: number | null;
   created_at: string;
 }
-
 interface CompareItem {
   model_id: string;
   name: string;
@@ -48,113 +42,118 @@ interface CompareItem {
   win_rate: number | null;
   excess_return: number | null;
 }
-
 interface FeatureItem {
   name: string;
   importance: number;
   rank: number;
 }
 
-// ==================== 模型卡片 ====================
+const fmtPct = (v: number | null) =>
+  v != null ? `${(v * 100).toFixed(1)}%` : "N/A";
+const TYPE_COLORS: Record<string, string> = {
+  lstm: "text-accent-blue",
+  transformer: "text-accent-purple",
+  lightgbm: "text-gain",
+  xgboost: "text-amber-400",
+};
 
-function ModelCard({ model, delay = 0 }: { model: ModelInfo; delay?: number }) {
-  const typeColors: Record<string, string> = {
-    lstm: "from-blue-600/20 to-cyan-500/20",
-    transformer: "from-purple-600/20 to-pink-500/20",
-    lightgbm: "from-green-600/20 to-emerald-500/20",
-    xgboost: "from-orange-600/20 to-yellow-500/20",
-  };
-
+function ModelCard({
+  model,
+  onViewPrediction,
+  onSettings,
+}: {
+  model: ModelInfo;
+  onViewPrediction: (m: ModelInfo) => void;
+  onSettings: (m: ModelInfo) => void;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }}
-      className="clay-card"
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-clay-sm bg-gradient-to-br ${typeColors[model.model_type] || "from-primary-600/20 to-neon-purple/20"}`}>
-            <Brain className="w-6 h-6 text-neon-blue" />
+    <div className="t-card">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded bg-accent-blue/10">
+            <Brain
+              className={`w-5 h-5 ${TYPE_COLORS[model.model_type] || "text-accent-blue"}`}
+            />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-100">{model.symbol}</h3>
-            <p className="text-sm text-slate-400">{model.model_type_display}</p>
+            <h3 className="text-sm font-semibold text-gray-100">
+              {model.symbol}
+            </h3>
+            <p className="text-xs text-gray-500">{model.model_type_display}</p>
           </div>
         </div>
-        <span className="clay-badge clay-badge-success flex items-center gap-1">
+        <span className="t-badge t-badge-gain flex items-center gap-1">
           <CheckCircle className="w-3 h-3" />
           已训练
         </span>
       </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="p-3 rounded-clay-sm bg-dark-800/50">
-          <div className="text-xs text-slate-500 mb-1">验证损失</div>
-          <div className="text-xl font-bold text-neon-green">
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="p-2 rounded bg-terminal-hover">
+          <div className="text-[10px] text-gray-500 mb-0.5">验证损失</div>
+          <div className="text-sm font-bold font-num text-gain">
             {model.val_loss ? model.val_loss.toFixed(6) : "N/A"}
           </div>
         </div>
-        <div className="p-3 rounded-clay-sm bg-dark-800/50">
-          <div className="text-xs text-slate-500 mb-1">训练轮数</div>
-          <div className="text-xl font-bold text-neon-blue">
+        <div className="p-2 rounded bg-terminal-hover">
+          <div className="text-[10px] text-gray-500 mb-0.5">训练轮数</div>
+          <div className="text-sm font-bold font-num text-accent-blue">
             {model.epochs || "N/A"}
           </div>
         </div>
-        <div className="p-3 rounded-clay-sm bg-dark-800/50">
-          <div className="text-xs text-slate-500 mb-1">特征数</div>
-          <div className="text-xl font-bold text-neon-purple">
+        <div className="p-2 rounded bg-terminal-hover">
+          <div className="text-[10px] text-gray-500 mb-0.5">特征数</div>
+          <div className="text-sm font-bold font-num text-accent-purple">
             {model.features?.length || 0}
           </div>
         </div>
-        <div className="p-3 rounded-clay-sm bg-dark-800/50">
-          <div className="text-xs text-slate-500 mb-1">数据量</div>
-          <div className="text-xl font-bold text-yellow-400">
+        <div className="p-2 rounded bg-terminal-hover">
+          <div className="text-[10px] text-gray-500 mb-0.5">数据量</div>
+          <div className="text-sm font-bold font-num text-amber-400">
             {model.data_points || "N/A"}
           </div>
         </div>
       </div>
-
-      <div className="flex items-center justify-between text-sm text-slate-400 mb-4 pb-4 border-b border-dark-700">
-        <div className="flex items-center gap-1">
-          <Clock className="w-4 h-4" />
-          {model.created_at}
-        </div>
+      <div className="flex items-center text-xs text-gray-500 mb-3 pb-3 border-b border-terminal-border">
+        <Clock className="w-3 h-3 mr-1" />
+        {model.created_at}
       </div>
-
       <div className="flex gap-2">
-        <button className="flex-1 clay-button !py-2 text-sm flex items-center justify-center gap-1">
-          <Play className="w-4 h-4" />
+        <button
+          onClick={() => onViewPrediction(model)}
+          className="flex-1 t-btn text-xs !py-1.5 flex items-center justify-center gap-1"
+        >
+          <Play className="w-3.5 h-3.5" />
           查看预测
         </button>
-        <button className="clay-button-secondary !px-3 !py-2">
-          <Settings className="w-4 h-4" />
+        <button
+          onClick={() => onSettings(model)}
+          className="t-btn-ghost !px-2.5 !py-1.5"
+          title="模型详情"
+        >
+          <Settings className="w-3.5 h-3.5" />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// ==================== 性能对比表格 ====================
-
 function PerformanceTable({ data }: { data: CompareItem[] }) {
-  if (data.length === 0) {
+  if (data.length === 0)
     return (
-      <div className="clay-card">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">模型性能对比</h3>
-        <p className="text-slate-500 text-center py-8">暂无回测数据</p>
+      <div className="t-card">
+        <h3 className="text-sm font-semibold text-gray-200 mb-3">
+          模型性能对比
+        </h3>
+        <p className="text-gray-500 text-center py-8 text-sm">暂无回测数据</p>
       </div>
     );
-  }
-
   return (
-    <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">模型性能对比（回测结果）</h3>
-      </div>
-
+    <div className="t-card">
+      <h3 className="text-sm font-semibold text-gray-200 mb-3">
+        模型性能对比（回测结果）
+      </h3>
       <div className="overflow-x-auto">
-        <table className="clay-table">
+        <table className="t-table">
           <thead>
             <tr>
               <th>模型</th>
@@ -169,22 +168,28 @@ function PerformanceTable({ data }: { data: CompareItem[] }) {
           <tbody>
             {data.map((item) => (
               <tr key={item.model_id}>
-                <td className="font-medium text-slate-200">{item.model_type.toUpperCase()}</td>
+                <td className="font-medium text-gray-200">
+                  {item.model_type.toUpperCase()}
+                </td>
                 <td>{item.symbol}</td>
-                <td className={`${(item.annual_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
-                  {item.annual_return != null ? `${(item.annual_return * 100).toFixed(1)}%` : "N/A"}
+                <td
+                  className={`font-num ${(item.annual_return || 0) >= 0 ? "text-gain" : "text-loss"}`}
+                >
+                  {fmtPct(item.annual_return)}
                 </td>
-                <td className="text-neon-blue">
-                  {item.sharpe_ratio != null ? item.sharpe_ratio.toFixed(2) : "N/A"}
+                <td className="text-accent-blue font-num">
+                  {item.sharpe_ratio?.toFixed(2) ?? "N/A"}
                 </td>
-                <td className="text-red-400">
-                  {item.max_drawdown != null ? `${(item.max_drawdown * 100).toFixed(1)}%` : "N/A"}
+                <td className="text-loss font-num">
+                  {fmtPct(item.max_drawdown)}
                 </td>
-                <td className="text-yellow-400">
-                  {item.direction_accuracy != null ? `${(item.direction_accuracy * 100).toFixed(1)}%` : "N/A"}
+                <td className="text-amber-400 font-num">
+                  {fmtPct(item.direction_accuracy)}
                 </td>
-                <td className={`${(item.excess_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
-                  {item.excess_return != null ? `${(item.excess_return * 100).toFixed(1)}%` : "N/A"}
+                <td
+                  className={`font-num ${(item.excess_return || 0) >= 0 ? "text-gain" : "text-loss"}`}
+                >
+                  {fmtPct(item.excess_return)}
                 </td>
               </tr>
             ))}
@@ -195,33 +200,36 @@ function PerformanceTable({ data }: { data: CompareItem[] }) {
   );
 }
 
-// ==================== 特征重要性 ====================
-
 function FeatureImportance({ features }: { features: FeatureItem[] }) {
   if (features.length === 0) return null;
-
-  const maxImportance = Math.max(...features.map((f) => f.importance));
+  const maxImp = Math.max(...features.map((f) => f.importance));
   const colors = [
-    "bg-neon-blue", "bg-neon-purple", "bg-neon-green", "bg-yellow-400",
-    "bg-orange-400", "bg-pink-400", "bg-cyan-400", "bg-indigo-400",
-    "bg-emerald-400", "bg-rose-400", "bg-amber-400", "bg-teal-400",
+    "!bg-accent-blue",
+    "!bg-accent-purple",
+    "!bg-gain",
+    "!bg-amber-400",
+    "!bg-orange-400",
+    "!bg-pink-400",
+    "!bg-accent-cyan",
+    "!bg-indigo-400",
   ];
-
   return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">特征重要性</h3>
-      <div className="space-y-3">
-        {features.map((feature, idx) => (
-          <div key={feature.name}>
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-slate-300">{feature.name}</span>
-              <span className="text-slate-400">{(feature.importance * 100).toFixed(1)}%</span>
+    <div className="t-card">
+      <h3 className="text-sm font-semibold text-gray-200 mb-3">特征重要性</h3>
+      <div className="space-y-2.5">
+        {features.map((f, i) => (
+          <div key={f.name}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-gray-300">{f.name}</span>
+              <span className="text-gray-400 font-num">
+                {(f.importance * 100).toFixed(1)}%
+              </span>
             </div>
-            <div className="clay-progress">
+            <div className="t-progress">
               <div
-                className={`clay-progress-bar ${colors[idx % colors.length]}`}
-                style={{ width: `${(feature.importance / maxImportance) * 100}%` }}
-              ></div>
+                className={`t-progress-bar ${colors[i % colors.length]}`}
+                style={{ width: `${(f.importance / maxImp) * 100}%` }}
+              />
             </div>
           </div>
         ))}
@@ -230,53 +238,70 @@ function FeatureImportance({ features }: { features: FeatureItem[] }) {
   );
 }
 
-// ==================== 模型统计概要 ====================
-
 function ModelStats({ models }: { models: ModelInfo[] }) {
   const types = new Set(models.map((m) => m.model_type));
   const symbols = new Set(models.map((m) => m.symbol));
-
+  const stats = [
+    {
+      label: "总模型数",
+      value: models.length,
+      icon: Brain,
+      color: "text-accent-blue",
+    },
+    {
+      label: "模型类型",
+      value: types.size,
+      icon: Activity,
+      color: "text-accent-purple",
+    },
+    {
+      label: "覆盖股票",
+      value: symbols.size,
+      icon: TrendingUp,
+      color: "text-gain",
+    },
+    {
+      label: "已训练",
+      value: models.filter((m) => m.status === "trained").length,
+      icon: CheckCircle,
+      color: "text-amber-400",
+    },
+  ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {[
-        { label: "总模型数", value: models.length, icon: Brain, color: "text-neon-blue" },
-        { label: "模型类型", value: types.size, icon: Activity, color: "text-neon-purple" },
-        { label: "覆盖股票", value: symbols.size, icon: TrendingUp, color: "text-neon-green" },
-        { label: "已训练", value: models.filter((m) => m.status === "trained").length, icon: CheckCircle, color: "text-yellow-400" },
-      ].map((stat) => (
-        <motion.div
-          key={stat.label}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="clay-card !p-4"
-        >
-          <div className="flex items-center gap-3">
-            <stat.icon className={`w-8 h-8 ${stat.color}`} />
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {stats.map((s) => (
+        <div key={s.label} className="t-card !p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded bg-accent-blue/10">
+              <s.icon className={`w-5 h-5 ${s.color}`} />
+            </div>
             <div>
-              <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
-              <div className="text-xs text-slate-500">{stat.label}</div>
+              <div className={`text-xl font-bold font-num ${s.color}`}>
+                {s.value}
+              </div>
+              <div className="text-xs text-gray-500">{s.label}</div>
             </div>
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
 }
 
-// ==================== 主页面 ====================
-
 export default function ModelsPage() {
+  const router = useRouter();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [compareData, setCompareData] = useState<CompareItem[]>([]);
   const [features, setFeatures] = useState<FeatureItem[]>([]);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>("");
+  const [selectedSymbol, setSelectedSymbol] = useState("");
   const [symbols, setSymbols] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detailModel, setDetailModel] = useState<ModelInfo | null>(null);
 
-  // 加载模型列表
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+    (async () => {
       setLoading(true);
       setError(null);
       try {
@@ -284,138 +309,200 @@ export default function ModelsPage() {
           api.get<{ items: ModelInfo[]; total: number }>("/models/"),
           api.get<{ symbols: string[] }>("/models/symbols"),
         ]);
+        if (cancelled) return;
         setModels(modelsRes.items);
         setSymbols(symbolsRes.symbols);
-
-        // 加载对比数据
-        const compareRes = await api.get<{ models: CompareItem[] }>("/models/compare");
+        const compareRes = await api.get<{ models: CompareItem[] }>(
+          "/models/compare",
+        );
+        if (cancelled) return;
         setCompareData(compareRes.models);
-
-        // 加载第一个 LightGBM 模型的特征重要性（可选，失败不影响页面）
         const lgb = modelsRes.items.find((m) => m.model_type === "lightgbm");
         if (lgb) {
           try {
-            const featRes = await api.get<{ features: FeatureItem[] }>(
-              `/models/${lgb.model_id}/feature-importance`
+            const f = await api.get<{ features: FeatureItem[] }>(
+              `/models/${lgb.model_id}/feature-importance`,
             );
-            setFeatures(featRes.features);
+            if (!cancelled) setFeatures(f.features);
           } catch {}
         }
       } catch (e: any) {
-        setError(e.message || "加载失败");
+        if (!cancelled) setError(e.message || "加载失败");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    }
-    load();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // 按股票筛选对比数据
+  const handleViewPrediction = (model: ModelInfo) => {
+    // Navigate to strategies page which shows equity curves and predictions
+    router.push("/dashboard/strategies");
+  };
+
+  const handleSettings = (model: ModelInfo) => {
+    setDetailModel(detailModel?.model_id === model.model_id ? null : model);
+  };
+
   const filteredCompare = selectedSymbol
     ? compareData.filter((d) => d.symbol === selectedSymbol)
     : compareData;
-
-  // 按股票筛选模型卡片（只显示选中股票的最佳模型或全部）
   const filteredModels = selectedSymbol
     ? models.filter((m) => m.symbol === selectedSymbol)
     : models;
-
-  // 按模型类型分组显示（每种类型一个）
   const uniqueByType = Array.from(
-    new Map(filteredModels.map((m) => [m.model_type, m])).values()
+    new Map(filteredModels.map((m) => [m.model_type, m])).values(),
   );
 
-  const handleRefresh = async () => {
-    try {
-      await api.get("/models/refresh");
-      window.location.reload();
-    } catch {}
-  };
-
-  if (loading) {
+  if (loading)
     return (
       <div className="flex items-center justify-center h-96">
-        <RefreshCw className="w-8 h-8 text-neon-blue animate-spin" />
-        <span className="ml-3 text-slate-400">加载模型数据...</span>
+        <RefreshCw className="w-6 h-6 text-accent-blue animate-spin" />
+        <span className="ml-3 text-gray-400 text-sm">加载模型数据...</span>
       </div>
     );
-  }
-
-  if (error) {
+  if (error)
     return (
-      <div className="clay-card text-center py-12">
-        <p className="text-red-400 mb-4">{error}</p>
-        <button onClick={handleRefresh} className="clay-button">
+      <div className="t-card text-center py-12">
+        <p className="text-loss mb-4 text-sm">{error}</p>
+        <button onClick={() => window.location.reload()} className="t-btn">
           重试
         </button>
       </div>
     );
-  }
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">模型管理</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-xl font-bold text-gray-100">模型管理</h1>
+          <p className="text-gray-500 text-xs mt-1">
             {models.length} 个已训练模型，覆盖 {symbols.length} 只股票
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <select
-            className="clay-select !py-2 !px-3 text-sm"
+            className="t-select !py-1.5 text-xs w-28"
             value={selectedSymbol}
             onChange={(e) => setSelectedSymbol(e.target.value)}
           >
             <option value="">全部股票</option>
             {symbols.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
-          <button onClick={handleRefresh} className="clay-button-secondary flex items-center gap-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="t-btn-ghost flex items-center gap-1.5 text-sm"
+          >
             <RefreshCw className="w-4 h-4" />
             刷新
           </button>
         </div>
       </div>
 
-      {/* 统计概要 */}
       <ModelStats models={models} />
 
-      {/* 模型卡片 */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {uniqueByType.map((model, index) => (
-          <ModelCard key={model.model_id} model={model} delay={index * 0.1} />
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {uniqueByType.map((model) => (
+          <ModelCard
+            key={model.model_id}
+            model={model}
+            onViewPrediction={handleViewPrediction}
+            onSettings={handleSettings}
+          />
         ))}
       </div>
 
-      {/* 性能对比表格 */}
+      {/* Model detail panel */}
+      {detailModel && (
+        <div className="t-card !border border-accent-blue/30">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-200">
+              模型详情 — {detailModel.model_type_display} / {detailModel.symbol}
+            </h3>
+            <button
+              onClick={() => setDetailModel(null)}
+              className="text-gray-500 hover:text-gray-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-2 rounded bg-terminal-hover">
+              <div className="text-[10px] text-gray-500">模型ID</div>
+              <div className="text-xs text-gray-200 font-mono mt-0.5">
+                {detailModel.model_id}
+              </div>
+            </div>
+            <div className="p-2 rounded bg-terminal-hover">
+              <div className="text-[10px] text-gray-500">训练时间</div>
+              <div className="text-xs text-gray-200 mt-0.5">
+                {detailModel.created_at}
+              </div>
+            </div>
+            <div className="p-2 rounded bg-terminal-hover">
+              <div className="text-[10px] text-gray-500">数据量</div>
+              <div className="text-xs text-gray-200 font-num mt-0.5">
+                {detailModel.data_points || "N/A"} 条
+              </div>
+            </div>
+            <div className="p-2 rounded bg-terminal-hover">
+              <div className="text-[10px] text-gray-500">状态</div>
+              <div className="text-xs text-gain mt-0.5">
+                {detailModel.status}
+              </div>
+            </div>
+          </div>
+          {detailModel.features.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-terminal-border">
+              <div className="text-xs text-gray-500 mb-1.5">
+                使用特征 ({detailModel.features.length})
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {detailModel.features.map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-accent-blue/10 text-accent-blue border border-accent-blue/20"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <PerformanceTable data={filteredCompare} />
 
-      {/* 特征重要性 */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-4">
         <FeatureImportance features={features} />
-
-        {/* 模型列表 */}
-        <div className="clay-card">
-          <h3 className="text-lg font-semibold text-slate-100 mb-4">全部模型</h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="t-card">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">全部模型</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-thin">
             {filteredModels.map((model) => (
-              <div key={model.model_id} className="flex items-center justify-between p-3 rounded-clay-sm bg-dark-800/50">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-neon-green" />
+              <div
+                key={model.model_id}
+                className="flex items-center justify-between p-2.5 rounded bg-terminal-hover"
+              >
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle className="w-4 h-4 text-gain" />
                   <div>
-                    <div className="font-medium text-slate-200">
+                    <div className="text-sm font-medium text-gray-200">
                       {model.model_type.toUpperCase()} - {model.symbol}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-gray-500">
                       Loss: {model.val_loss?.toFixed(6) || "N/A"}
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-500">{model.model_type_display}</div>
+                <div className="text-xs text-gray-500">
+                  {model.model_type_display}
                 </div>
               </div>
             ))}

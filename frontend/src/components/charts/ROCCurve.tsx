@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useMemo } from "react";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+import { echarts } from "./echarts-setup";
+import { BLUE, PURPLE, AMBER, GAIN_COLOR } from "./theme";
 
 interface ROCCurveProps {
   data: {
@@ -17,24 +19,15 @@ interface ROCCurveProps {
 }
 
 export function ROCCurve({ data, height = 350 }: ROCCurveProps) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current, "dark");
-
-    const series: echarts.SeriesOption[] = data.models.map((model) => ({
-      name: `${model.name} (AUC: ${model.auc.toFixed(2)})`,
+  const option = useMemo(() => {
+    const series: any[] = data.models.map((m) => ({
+      name: `${m.name} (AUC: ${m.auc.toFixed(2)})`,
       type: "line",
-      data: model.fpr.map((fpr, i) => [fpr, model.tpr[i]]),
+      data: m.fpr.map((fpr, i) => [fpr, m.tpr[i]]),
       smooth: true,
-      lineStyle: { width: 2, color: model.color },
       symbol: "none",
+      lineStyle: { width: 2, color: m.color },
     }));
-
-    // 添加对角线（随机猜测）
     series.push({
       name: "随机猜测",
       type: "line",
@@ -42,115 +35,84 @@ export function ROCCurve({ data, height = 350 }: ROCCurveProps) {
         [0, 0],
         [1, 1],
       ],
-      lineStyle: { width: 1, color: "#64748b", type: "dashed" },
+      lineStyle: { width: 1, color: "#374151", type: "dashed" },
       symbol: "none",
     });
 
-    const option: echarts.EChartsOption = {
+    return {
       backgroundColor: "transparent",
+      animation: false,
       legend: {
         data: [
           ...data.models.map((m) => `${m.name} (AUC: ${m.auc.toFixed(2)})`),
           "随机猜测",
         ],
-        top: 10,
-        textStyle: { color: "#94a3b8", fontSize: 11 },
+        top: 5,
+        textStyle: { color: "#9CA3AF", fontSize: 11 },
       },
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textStyle: { color: "#f1f5f9" },
-        formatter: (params: any) => {
-          let result = `<div style="font-size: 12px;">`;
-          params.forEach((item: any) => {
-            if (item.data) {
-              result += `<div>${item.seriesName}: FPR=${item.data[0]?.toFixed(2)}, TPR=${item.data[1]?.toFixed(2)}</div>`;
-            }
-          });
-          result += "</div>";
-          return result;
-        },
+        backgroundColor: "#1F2937",
+        borderColor: "#374151",
+        textStyle: { color: "#F9FAFB", fontSize: 11 },
       },
-      grid: {
-        left: "12%",
-        right: "5%",
-        top: 60,
-        bottom: 40,
-      },
+      grid: { left: 55, right: 20, top: 50, bottom: 40 },
       xAxis: {
         type: "value",
-        name: "假阳性率 (FPR)",
+        name: "FPR",
         nameLocation: "middle" as const,
         nameGap: 25,
-        nameTextStyle: { color: "#94a3b8" },
+        nameTextStyle: { color: "#6B7280" },
         min: 0,
         max: 1,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLine: { lineStyle: { color: "#1F2937" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
+        splitLine: { lineStyle: { color: "#1F293740" } },
       },
       yAxis: {
         type: "value",
-        name: "真阳性率 (TPR)",
+        name: "TPR",
         nameLocation: "middle" as const,
         nameGap: 35,
-        nameTextStyle: { color: "#94a3b8" },
+        nameTextStyle: { color: "#6B7280" },
         min: 0,
         max: 1,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLine: { lineStyle: { color: "#1F2937" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
+        splitLine: { lineStyle: { color: "#1F293740" } },
       },
       series,
     };
-
-    chartInstance.current.setOption(option);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, [data]);
+  }, [data.models]);
 
   return (
-    <div
-      ref={chartRef}
-      style={{ width: "100%", height }}
-      className="rounded-clay-sm"
+    <ReactEChartsCore
+      echarts={echarts}
+      option={option}
+      style={{ height, width: "100%" }}
+      notMerge
+      lazyUpdate
     />
   );
 }
 
-// 生成模拟ROC数据
 export function generateMockROCData() {
-  const generateROC = (auc: number) => {
-    const points = 50;
-    const fpr: number[] = [];
-    const tpr: number[] = [];
-
-    for (let i = 0; i <= points; i++) {
-      const x = i / points;
-      // 使用幂函数模拟ROC曲线形状
-      const y = Math.pow(x, 1 / (auc * 2));
+  const genROC = (auc: number) => {
+    const fpr: number[] = [],
+      tpr: number[] = [];
+    for (let i = 0; i <= 50; i++) {
+      const x = i / 50;
       fpr.push(x);
-      tpr.push(Math.min(1, y));
+      tpr.push(Math.min(1, Math.pow(x, 1 / (auc * 2))));
     }
-
     return { fpr, tpr };
   };
-
   return {
     models: [
-      { name: "LSTM", ...generateROC(0.72), auc: 0.72, color: "#00f5ff" },
-      { name: "Transformer", ...generateROC(0.74), auc: 0.74, color: "#bf00ff" },
-      { name: "LightGBM", ...generateROC(0.68), auc: 0.68, color: "#ffa502" },
-      { name: "集成模型", ...generateROC(0.76), auc: 0.76, color: "#00ff88" },
+      { name: "LSTM", ...genROC(0.72), auc: 0.72, color: BLUE },
+      { name: "Transformer", ...genROC(0.74), auc: 0.74, color: PURPLE },
+      { name: "LightGBM", ...genROC(0.68), auc: 0.68, color: AMBER },
+      { name: "集成模型", ...genROC(0.76), auc: 0.76, color: GAIN_COLOR },
     ],
   };
 }

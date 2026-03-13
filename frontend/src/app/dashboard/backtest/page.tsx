@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import {
-  BarChart3,
   TrendingUp,
-  TrendingDown,
   RefreshCw,
   Clock,
   Target,
@@ -15,8 +12,6 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import api from "@/lib/api";
-
-// ==================== 类型定义 ====================
 
 interface BacktestResult {
   id: number;
@@ -37,17 +32,18 @@ interface BacktestResult {
   benchmark_return: number | null;
   excess_return: number | null;
 }
-
 interface BacktestSummary {
-  summary: Record<string, {
-    count: number;
-    avg_sharpe: number | null;
-    avg_return: number | null;
-    avg_direction_accuracy: number | null;
-  }>;
+  summary: Record<
+    string,
+    {
+      count: number;
+      avg_sharpe: number | null;
+      avg_return: number | null;
+      avg_direction_accuracy: number | null;
+    }
+  >;
   best_models: BacktestResult[];
 }
-
 interface HeatmapData {
   symbols: string[];
   model_types: string[];
@@ -60,265 +56,54 @@ interface HeatmapData {
   }>;
 }
 
-// ==================== 汇总卡片 ====================
+const TYPE_NAMES: Record<string, string> = {
+  lstm: "LSTM",
+  transformer: "Transformer",
+  lightgbm: "LightGBM",
+  xgboost: "XGBoost",
+};
+const fmtPct = (v: number | null) =>
+  v != null ? `${(v * 100).toFixed(1)}%` : "-";
 
 function SummaryCard({
-  title, value, subtitle, changeType, icon: Icon, delay = 0,
+  title,
+  value,
+  sub,
+  up,
+  icon: Icon,
 }: {
-  title: string; value: string; subtitle?: string;
-  changeType?: "up" | "down" | "neutral"; icon: React.ElementType; delay?: number;
+  title: string;
+  value: string;
+  sub?: string;
+  up?: boolean | null;
+  icon: React.ElementType;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }} className="clay-card"
-    >
+    <div className="t-card">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-slate-400 mb-1">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-100">{value}</h3>
-          {subtitle && (
-            <div className={`flex items-center gap-1 mt-2 text-sm ${
-              changeType === "up" ? "text-neon-green" : changeType === "down" ? "text-red-400" : "text-slate-400"
-            }`}>
-              {changeType === "up" ? <ArrowUpRight className="w-4 h-4" /> :
-               changeType === "down" ? <ArrowDownRight className="w-4 h-4" /> : null}
-              <span>{subtitle}</span>
+          <p className="text-xs text-gray-500 mb-1">{title}</p>
+          <h3 className="text-xl font-bold font-num text-gray-100">{value}</h3>
+          {sub && (
+            <div
+              className={`flex items-center gap-1 mt-1.5 text-xs ${up === true ? "text-gain" : up === false ? "text-loss" : "text-gray-500"}`}
+            >
+              {up === true ? (
+                <ArrowUpRight className="w-3 h-3" />
+              ) : up === false ? (
+                <ArrowDownRight className="w-3 h-3" />
+              ) : null}
+              <span>{sub}</span>
             </div>
           )}
         </div>
-        <div className="p-3 rounded-clay-sm bg-gradient-to-br from-primary-600/20 to-neon-purple/20">
-          <Icon className="w-6 h-6 text-neon-blue" />
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ==================== 回测结果表格 ====================
-
-function ResultsTable({ results, selectedSymbol, setSelectedSymbol, symbols }: {
-  results: BacktestResult[];
-  selectedSymbol: string;
-  setSelectedSymbol: (s: string) => void;
-  symbols: string[];
-}) {
-  const filtered = selectedSymbol
-    ? results.filter((r) => r.symbol === selectedSymbol)
-    : results;
-
-  return (
-    <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">全部回测结果</h3>
-        <select
-          className="clay-select !py-2 !px-3 text-sm w-32"
-          value={selectedSymbol}
-          onChange={(e) => setSelectedSymbol(e.target.value)}
-        >
-          <option value="">全部</option>
-          {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="clay-table">
-          <thead>
-            <tr>
-              <th>模型</th>
-              <th>股票</th>
-              <th>年化收益</th>
-              <th>夏普</th>
-              <th>Sortino</th>
-              <th>最大回撤</th>
-              <th>方向准确率</th>
-              <th>交易次数</th>
-              <th>超额收益</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => (
-              <tr key={r.model_id}>
-                <td className="font-medium text-slate-200">{r.model_type.toUpperCase()}</td>
-                <td>{r.symbol}</td>
-                <td className={`${(r.annual_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
-                  {r.annual_return != null ? `${(r.annual_return * 100).toFixed(1)}%` : "-"}
-                </td>
-                <td className="text-neon-blue">
-                  {r.sharpe_ratio != null ? r.sharpe_ratio.toFixed(2) : "-"}
-                </td>
-                <td className="text-cyan-400">
-                  {r.sortino_ratio != null ? r.sortino_ratio.toFixed(2) : "-"}
-                </td>
-                <td className="text-red-400">
-                  {r.max_drawdown != null ? `${(r.max_drawdown * 100).toFixed(1)}%` : "-"}
-                </td>
-                <td className="text-yellow-400">
-                  {r.direction_accuracy != null ? `${(r.direction_accuracy * 100).toFixed(1)}%` : "-"}
-                </td>
-                <td>{r.n_trades}</td>
-                <td className={`${(r.excess_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
-                  {r.excess_return != null ? `${(r.excess_return * 100).toFixed(1)}%` : "-"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ==================== 模型类型对比 ====================
-
-function ModelTypeSummary({ summary }: { summary: BacktestSummary["summary"] }) {
-  const types = Object.entries(summary);
-  if (types.length === 0) return null;
-
-  const typeNames: Record<string, string> = {
-    lstm: "LSTM", transformer: "Transformer",
-    lightgbm: "LightGBM", xgboost: "XGBoost",
-  };
-
-  return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">模型类型对比</h3>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {types.map(([type, stats]) => (
-          <div key={type} className="p-4 rounded-clay-sm bg-dark-800/50 text-center">
-            <div className="text-lg font-bold text-slate-100 mb-2">
-              {typeNames[type] || type}
-            </div>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="text-slate-500">平均夏普: </span>
-                <span className="text-neon-blue font-medium">
-                  {stats.avg_sharpe?.toFixed(2) || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500">平均收益: </span>
-                <span className={`font-medium ${(stats.avg_return || 0) >= 0 ? "text-neon-green" : "text-red-400"}`}>
-                  {stats.avg_return != null ? `${(stats.avg_return * 100).toFixed(1)}%` : "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500">方向准确: </span>
-                <span className="text-yellow-400 font-medium">
-                  {stats.avg_direction_accuracy != null ? `${(stats.avg_direction_accuracy * 100).toFixed(1)}%` : "N/A"}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ==================== Sharpe 热力图 ====================
-
-function SharpeHeatmap({ data }: { data: HeatmapData }) {
-  if (!data.symbols.length) return null;
-
-  const getColor = (sharpe: number) => {
-    if (sharpe >= 2) return "bg-neon-green";
-    if (sharpe >= 1) return "bg-neon-green/60";
-    if (sharpe >= 0.5) return "bg-yellow-400/50";
-    if (sharpe >= 0) return "bg-orange-400/40";
-    return "bg-red-500/50";
-  };
-
-  const getValue = (mt: string, sym: string) => {
-    const item = data.data.find((d) => d.model_type === mt && d.symbol === sym);
-    return item?.sharpe_ratio || 0;
-  };
-
-  const typeNames: Record<string, string> = {
-    lstm: "LSTM", transformer: "Transformer",
-    lightgbm: "LightGBM", xgboost: "XGBoost",
-  };
-
-  return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">Sharpe 热力图</h3>
-      <div className="overflow-x-auto">
-        <div className="inline-block">
-          <div className="flex">
-            <div className="w-24"></div>
-            {data.symbols.map((s) => (
-              <div key={s} className="w-20 text-center text-xs text-slate-400 py-2">{s}</div>
-            ))}
-          </div>
-          {data.model_types.map((mt) => (
-            <div key={mt} className="flex items-center">
-              <div className="w-24 text-xs text-slate-400 pr-2 text-right">
-                {typeNames[mt] || mt}
-              </div>
-              {data.symbols.map((sym) => {
-                const val = getValue(mt, sym);
-                return (
-                  <div
-                    key={sym}
-                    className={`w-20 h-12 flex items-center justify-center text-xs font-medium ${getColor(val)} text-white`}
-                  >
-                    {val.toFixed(2)}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+        <div className="p-2 rounded bg-accent-blue/10">
+          <Icon className="w-5 h-5 text-accent-blue" />
         </div>
       </div>
     </div>
   );
 }
-
-// ==================== 最佳模型 ====================
-
-function BestModels({ models }: { models: BacktestResult[] }) {
-  if (models.length === 0) return null;
-
-  return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">Top 5 最佳模型（按 Sharpe）</h3>
-      <div className="space-y-3">
-        {models.map((m, i) => (
-          <div key={m.model_id} className="flex items-center justify-between p-3 rounded-clay-sm bg-dark-800/50">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                i === 0 ? "bg-yellow-400/20 text-yellow-400" :
-                i === 1 ? "bg-slate-300/20 text-slate-300" :
-                i === 2 ? "bg-orange-400/20 text-orange-400" :
-                "bg-dark-700 text-slate-400"
-              }`}>
-                {i + 1}
-              </div>
-              <div>
-                <div className="font-medium text-slate-200">
-                  {m.model_type.toUpperCase()} - {m.symbol}
-                </div>
-                <div className="text-xs text-slate-500">
-                  收益 {m.total_return != null ? `${(m.total_return * 100).toFixed(1)}%` : "N/A"}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-neon-blue font-bold">
-                Sharpe {m.sharpe_ratio?.toFixed(2) || "N/A"}
-              </div>
-              <div className="text-xs text-slate-500">
-                方向 {m.direction_accuracy != null ? `${(m.direction_accuracy * 100).toFixed(1)}%` : "N/A"}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ==================== 主页面 ====================
 
 export default function BacktestPage() {
   const [results, setResults] = useState<BacktestResult[]>([]);
@@ -330,103 +115,314 @@ export default function BacktestPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+    (async () => {
       setLoading(true);
       setError(null);
       try {
-        const [resultsRes, summaryRes, heatmapRes] = await Promise.all([
+        const [r, s, h] = await Promise.all([
           api.get<{ items: BacktestResult[]; total: number }>("/backtest/"),
           api.get<BacktestSummary>("/backtest/summary"),
           api.get<HeatmapData>("/backtest/heatmap"),
         ]);
-        setResults(resultsRes.items);
-        setSummary(summaryRes);
-        setHeatmap(heatmapRes);
-
-        const syms = Array.from(new Set(resultsRes.items.map((r) => r.symbol))).sort();
-        setSymbols(syms);
+        if (cancelled) return;
+        setResults(r.items);
+        setSummary(s);
+        setHeatmap(h);
+        setSymbols(Array.from(new Set(r.items.map((r) => r.symbol))).sort());
       } catch (e: any) {
-        setError(e.message || "加载失败");
+        if (!cancelled) setError(e.message || "加载失败");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    }
-    load();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  if (loading) {
+  if (loading)
     return (
       <div className="flex items-center justify-center h-96">
-        <RefreshCw className="w-8 h-8 text-neon-blue animate-spin" />
-        <span className="ml-3 text-slate-400">加载回测数据...</span>
+        <RefreshCw className="w-6 h-6 text-accent-blue animate-spin" />
+        <span className="ml-3 text-gray-400 text-sm">加载回测数据...</span>
       </div>
     );
-  }
-
-  if (error) {
+  if (error)
     return (
-      <div className="clay-card text-center py-12">
-        <p className="text-red-400 mb-4">{error}</p>
-        <button onClick={() => window.location.reload()} className="clay-button">重试</button>
+      <div className="t-card text-center py-12">
+        <p className="text-loss mb-4 text-sm">{error}</p>
+        <button onClick={() => window.location.reload()} className="t-btn">
+          重试
+        </button>
       </div>
     );
-  }
 
-  // 计算汇总指标
-  const avgSharpe = results.length > 0
-    ? results.reduce((s, r) => s + (r.sharpe_ratio || 0), 0) / results.length : 0;
-  const bestSharpe = results.length > 0
-    ? Math.max(...results.map((r) => r.sharpe_ratio || 0)) : 0;
-  const avgAccuracy = results.length > 0
-    ? results.reduce((s, r) => s + (r.direction_accuracy || 0), 0) / results.length : 0;
-  const avgReturn = results.length > 0
-    ? results.reduce((s, r) => s + (r.total_return || 0), 0) / results.length : 0;
+  const avg = (arr: number[]) =>
+    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const avgSharpe = avg(results.map((r) => r.sharpe_ratio || 0));
+  const bestSharpe = results.length
+    ? Math.max(...results.map((r) => r.sharpe_ratio || 0))
+    : 0;
+  const avgAcc = avg(results.map((r) => r.direction_accuracy || 0));
+  const avgRet = avg(results.map((r) => r.total_return || 0));
+  const filtered = selectedSymbol
+    ? results.filter((r) => r.symbol === selectedSymbol)
+    : results;
+
+  const getHeatColor = (v: number) =>
+    v >= 2
+      ? "bg-gain"
+      : v >= 1
+        ? "bg-gain/60"
+        : v >= 0.5
+          ? "bg-amber-400/50"
+          : v >= 0
+            ? "bg-orange-400/40"
+            : "bg-loss/50";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">回测结果</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {results.length} 条回测记录，{symbols.length} 只股票
+          <h1 className="text-xl font-bold text-gray-100">回测结果</h1>
+          <p className="text-gray-500 text-xs mt-1">
+            {results.length} 条记录，{symbols.length} 只股票
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Clock className="w-4 h-4" />
-          <span>5 只美股 x 4 种模型</span>
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <Clock className="w-3.5 h-3.5" />5 只美股 × 4 种模型
         </div>
       </div>
 
-      {/* 核心指标 */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard title="平均夏普比率" value={avgSharpe.toFixed(2)}
-          subtitle="所有模型均值" changeType={avgSharpe > 1 ? "up" : "neutral"} icon={Target} delay={0} />
-        <SummaryCard title="最佳夏普" value={bestSharpe.toFixed(2)}
-          subtitle="单模型最高" changeType="up" icon={TrendingUp} delay={0.1} />
-        <SummaryCard title="平均方向准确率" value={`${(avgAccuracy * 100).toFixed(1)}%`}
-          subtitle={avgAccuracy > 0.5 ? "高于随机" : "接近随机"} changeType={avgAccuracy > 0.5 ? "up" : "neutral"} icon={Percent} delay={0.2} />
-        <SummaryCard title="平均总收益" value={`${(avgReturn * 100).toFixed(1)}%`}
-          subtitle="全部模型" changeType={avgReturn > 0 ? "up" : "down"} icon={Activity} delay={0.3} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <SummaryCard
+          title="平均夏普"
+          value={avgSharpe.toFixed(2)}
+          sub="所有模型均值"
+          up={avgSharpe > 1 ? true : null}
+          icon={Target}
+        />
+        <SummaryCard
+          title="最佳夏普"
+          value={bestSharpe.toFixed(2)}
+          sub="单模型最高"
+          up={true}
+          icon={TrendingUp}
+        />
+        <SummaryCard
+          title="平均方向准确率"
+          value={fmtPct(avgAcc)}
+          sub={avgAcc > 0.5 ? "高于随机" : "接近随机"}
+          up={avgAcc > 0.5}
+          icon={Percent}
+        />
+        <SummaryCard
+          title="平均总收益"
+          value={fmtPct(avgRet)}
+          sub="全部模型"
+          up={avgRet > 0 ? true : avgRet < 0 ? false : null}
+          icon={Activity}
+        />
       </div>
 
-      {/* 模型类型对比 */}
-      {summary && <ModelTypeSummary summary={summary.summary} />}
-
-      {/* Sharpe 热力图 */}
-      {heatmap && <SharpeHeatmap data={heatmap} />}
-
-      {/* Top 5 + 回测结果表格 */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div>
-          {summary && <BestModels models={summary.best_models} />}
+      {/* Model type summary */}
+      {summary && (
+        <div className="t-card">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">
+            模型类型对比
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Object.entries(summary.summary).map(([type, stats]) => (
+              <div
+                key={type}
+                className="p-3 rounded bg-terminal-hover text-center"
+              >
+                <div className="text-base font-bold text-gray-100 mb-1.5">
+                  {TYPE_NAMES[type] || type}
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div>
+                    <span className="text-gray-500">夏普: </span>
+                    <span className="text-accent-blue font-num">
+                      {stats.avg_sharpe?.toFixed(2) || "N/A"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">收益: </span>
+                    <span
+                      className={`font-num ${(stats.avg_return || 0) >= 0 ? "text-gain" : "text-loss"}`}
+                    >
+                      {fmtPct(stats.avg_return)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">准确: </span>
+                    <span className="text-amber-400 font-num">
+                      {fmtPct(stats.avg_direction_accuracy)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="lg:col-span-2">
-          <ResultsTable
-            results={results}
-            selectedSymbol={selectedSymbol}
-            setSelectedSymbol={setSelectedSymbol}
-            symbols={symbols}
-          />
+      )}
+
+      {/* Heatmap */}
+      {heatmap && heatmap.symbols.length > 0 && (
+        <div className="t-card">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">
+            Sharpe 热力图
+          </h3>
+          <div className="overflow-x-auto">
+            <div className="inline-block">
+              <div className="flex">
+                <div className="w-24" />
+                {heatmap.symbols.map((s) => (
+                  <div
+                    key={s}
+                    className="w-20 text-center text-xs text-gray-500 py-1.5"
+                  >
+                    {s}
+                  </div>
+                ))}
+              </div>
+              {heatmap.model_types.map((mt) => (
+                <div key={mt} className="flex items-center">
+                  <div className="w-24 text-xs text-gray-500 pr-2 text-right">
+                    {TYPE_NAMES[mt] || mt}
+                  </div>
+                  {heatmap.symbols.map((sym) => {
+                    const val =
+                      heatmap.data.find(
+                        (d) => d.model_type === mt && d.symbol === sym,
+                      )?.sharpe_ratio || 0;
+                    return (
+                      <div
+                        key={sym}
+                        className={`w-20 h-10 flex items-center justify-center text-xs font-num font-medium text-white ${getHeatColor(val)}`}
+                      >
+                        {val.toFixed(2)}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top 5 + Table */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        {summary && summary.best_models.length > 0 && (
+          <div className="t-card">
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">
+              Top 5 (Sharpe)
+            </h3>
+            <div className="space-y-2">
+              {summary.best_models.map((m, i) => (
+                <div
+                  key={m.model_id}
+                  className="flex items-center justify-between p-2.5 rounded bg-terminal-hover"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-amber-400/20 text-amber-400" : i === 1 ? "bg-gray-300/20 text-gray-300" : i === 2 ? "bg-orange-400/20 text-orange-400" : "bg-terminal-border text-gray-500"}`}
+                    >
+                      {i + 1}
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-200">
+                        {m.model_type.toUpperCase()} - {m.symbol}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        收益 {fmtPct(m.total_return)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-accent-blue font-bold font-num text-sm">
+                      {m.sharpe_ratio?.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      准确 {fmtPct(m.direction_accuracy)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="lg:col-span-2 t-card">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-200">
+              全部回测结果
+            </h3>
+            <select
+              className="t-select !py-1.5 text-xs w-28"
+              value={selectedSymbol}
+              onChange={(e) => setSelectedSymbol(e.target.value)}
+            >
+              <option value="">全部</option>
+              {symbols.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="t-table">
+              <thead>
+                <tr>
+                  <th>模型</th>
+                  <th>股票</th>
+                  <th>年化收益</th>
+                  <th>夏普</th>
+                  <th>Sortino</th>
+                  <th>最大回撤</th>
+                  <th>方向准确率</th>
+                  <th>交易次数</th>
+                  <th>超额收益</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.model_id}>
+                    <td className="font-medium text-gray-200">
+                      {r.model_type.toUpperCase()}
+                    </td>
+                    <td>{r.symbol}</td>
+                    <td
+                      className={`font-num ${(r.annual_return || 0) >= 0 ? "text-gain" : "text-loss"}`}
+                    >
+                      {fmtPct(r.annual_return)}
+                    </td>
+                    <td className="text-accent-blue font-num">
+                      {r.sharpe_ratio?.toFixed(2) ?? "-"}
+                    </td>
+                    <td className="text-accent-cyan font-num">
+                      {r.sortino_ratio?.toFixed(2) ?? "-"}
+                    </td>
+                    <td className="text-loss font-num">
+                      {fmtPct(r.max_drawdown)}
+                    </td>
+                    <td className="text-amber-400 font-num">
+                      {fmtPct(r.direction_accuracy)}
+                    </td>
+                    <td>{r.n_trades}</td>
+                    <td
+                      className={`font-num ${(r.excess_return || 0) >= 0 ? "text-gain" : "text-loss"}`}
+                    >
+                      {fmtPct(r.excess_return)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

@@ -1,157 +1,98 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useMemo } from "react";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+import { echarts } from "./echarts-setup";
+import { BLUE, GAIN_COLOR } from "./theme";
 
 interface EquityCurveProps {
-  data: {
-    dates: string[];
-    strategy: number[];
-    benchmark: number[];
-  };
+  data: { dates: string[]; strategy: number[]; benchmark: number[] };
   height?: number;
 }
 
-export function EquityCurve({ data, height = 400 }: EquityCurveProps) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current, "dark");
-
-    const option: echarts.EChartsOption = {
+export function EquityCurve({ data, height = 350 }: EquityCurveProps) {
+  const option = useMemo(
+    () => ({
       backgroundColor: "transparent",
+      animation: false,
       legend: {
         data: ["策略收益", "基准收益"],
-        top: 10,
-        textStyle: { color: "#94a3b8" },
+        top: 5,
+        textStyle: { color: "#9CA3AF", fontSize: 11 },
       },
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textStyle: { color: "#f1f5f9" },
-        formatter: (params: any) => {
-          const date = params[0]?.axisValue;
-          let result = `<div style="font-size: 12px;"><div style="margin-bottom: 4px;">${date}</div>`;
-          params.forEach((item: any) => {
-            result += `<div>${item.seriesName}: <span style="color: ${item.color}">${(item.value * 100).toFixed(2)}%</span></div>`;
-          });
-          result += "</div>";
-          return result;
-        },
+        backgroundColor: "#1F2937",
+        borderColor: "#374151",
+        textStyle: { color: "#F9FAFB", fontSize: 11 },
       },
-      grid: {
-        left: "10%",
-        right: "5%",
-        top: 60,
-        bottom: 60,
-      },
+      grid: { left: 60, right: 20, top: 40, bottom: 30 },
       xAxis: {
         type: "category",
         data: data.dates,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" },
-        splitLine: { show: false },
+        axisLine: { lineStyle: { color: "#1F2937" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
       },
       yAxis: {
         type: "value",
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: {
-          color: "#94a3b8",
-          formatter: (value: number) => `${(value * 100).toFixed(0)}%`,
-        },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLabel: { color: "#6B7280", fontSize: 10, formatter: "{value}" },
+        splitLine: { lineStyle: { color: "#1F293740" } },
       },
-      dataZoom: [
-        {
-          type: "inside",
-          start: 0,
-          end: 100,
-        },
-        {
-          show: true,
-          type: "slider",
-          bottom: 10,
-          borderColor: "#334155",
-          fillerColor: "rgba(59, 130, 246, 0.2)",
-          handleStyle: { color: "#3b82f6" },
-          textStyle: { color: "#94a3b8" },
-        },
-      ],
       series: [
         {
           name: "策略收益",
           type: "line",
           data: data.strategy,
           smooth: true,
-          lineStyle: { width: 2, color: "#00f5ff" },
+          showSymbol: false,
+          lineStyle: { width: 2, color: BLUE },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "rgba(0, 245, 255, 0.3)" },
-              { offset: 1, color: "rgba(0, 245, 255, 0)" },
+              { offset: 0, color: BLUE + "30" },
+              { offset: 1, color: BLUE + "00" },
             ]),
           },
-          symbol: "none",
         },
         {
           name: "基准收益",
           type: "line",
           data: data.benchmark,
           smooth: true,
-          lineStyle: { width: 2, color: "#64748b", type: "dashed" },
-          symbol: "none",
+          showSymbol: false,
+          lineStyle: { width: 1.5, color: "#6B7280", type: "dashed" },
         },
       ],
-    };
-
-    chartInstance.current.setOption(option);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, [data]);
+      dataZoom: [{ type: "inside", start: 0, end: 100 }],
+    }),
+    [data.dates, data.strategy, data.benchmark],
+  );
 
   return (
-    <div
-      ref={chartRef}
-      style={{ width: "100%", height }}
-      className="rounded-clay-sm"
+    <ReactEChartsCore
+      echarts={echarts}
+      option={option}
+      style={{ height, width: "100%" }}
+      notMerge
+      lazyUpdate
     />
   );
 }
 
-// 生成模拟收益曲线数据
-export function generateMockEquityData(days: number = 365) {
-  const dates: string[] = [];
-  const strategy: number[] = [];
-  const benchmark: number[] = [];
-
-  let strategyValue = 0;
-  let benchmarkValue = 0;
-  const baseDate = new Date("2024-01-01");
-
+export function generateMockEquityData(days = 365) {
+  const dates: string[] = [],
+    strategy: number[] = [],
+    benchmark: number[] = [];
+  let sv = 0,
+    bv = 0;
+  const base = new Date("2024-01-01");
   for (let i = 0; i < days; i++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() + i);
-    dates.push(date.toISOString().split("T")[0]);
-
-    // 策略收益：更高的增长率和较低的波动
-    strategyValue += (Math.random() - 0.45) * 0.015;
-    // 基准收益：较低的增长率
-    benchmarkValue += (Math.random() - 0.48) * 0.012;
-
-    strategy.push(strategyValue);
-    benchmark.push(benchmarkValue);
+    const d = new Date(base);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]);
+    sv += (Math.random() - 0.45) * 0.015;
+    bv += (Math.random() - 0.48) * 0.012;
+    strategy.push(sv);
+    benchmark.push(bv);
   }
-
   return { dates, strategy, benchmark };
 }

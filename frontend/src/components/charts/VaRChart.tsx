@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useMemo } from "react";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+import { echarts } from "./echarts-setup";
+import { CYAN, PURPLE, GAIN_COLOR, LOSS_COLOR } from "./theme";
 
 interface VaRChartProps {
   data: {
@@ -14,58 +16,33 @@ interface VaRChartProps {
 }
 
 export function VaRChart({ data, height = 300 }: VaRChartProps) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current, "dark");
-
-    const option: echarts.EChartsOption = {
+  const option = useMemo(
+    () => ({
       backgroundColor: "transparent",
+      animation: false,
       legend: {
         data: ["VaR (95%)", "VaR (99%)", "实际损失"],
-        top: 10,
-        textStyle: { color: "#94a3b8" },
+        top: 5,
+        textStyle: { color: "#9CA3AF", fontSize: 11 },
       },
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textStyle: { color: "#f1f5f9" },
-        formatter: (params: any) => {
-          const date = params[0]?.axisValue;
-          let result = `<div style="font-size: 12px;"><div style="margin-bottom: 4px;">${date}</div>`;
-          params.forEach((item: any) => {
-            result += `<div>${item.seriesName}: <span style="color: ${item.color}">${(item.value * 100).toFixed(2)}%</span></div>`;
-          });
-          result += "</div>";
-          return result;
-        },
+        backgroundColor: "#1F2937",
+        borderColor: "#374151",
+        textStyle: { color: "#F9FAFB", fontSize: 11 },
       },
-      grid: {
-        left: "10%",
-        right: "5%",
-        top: 50,
-        bottom: 40,
-      },
+      grid: { left: 60, right: 20, top: 40, bottom: 30 },
       xAxis: {
         type: "category",
         data: data.dates,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" },
-        splitLine: { show: false },
+        axisLine: { lineStyle: { color: "#1F2937" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
       },
       yAxis: {
         type: "value",
         max: 0,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: {
-          color: "#94a3b8",
-          formatter: (value: number) => `${(value * 100).toFixed(0)}%`,
-        },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLabel: { color: "#6B7280", fontSize: 10, formatter: "{value}" },
+        splitLine: { lineStyle: { color: "#1F293740" } },
       },
       series: [
         {
@@ -73,82 +50,64 @@ export function VaRChart({ data, height = 300 }: VaRChartProps) {
           type: "line",
           data: data.var95,
           smooth: true,
-          lineStyle: { width: 2, color: "#00f5ff" },
+          symbol: "none",
+          lineStyle: { width: 2, color: CYAN },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "rgba(0, 245, 255, 0)" },
-              { offset: 1, color: "rgba(0, 245, 255, 0.2)" },
+              { offset: 0, color: CYAN + "00" },
+              { offset: 1, color: CYAN + "30" },
             ]),
           },
-          symbol: "none",
         },
         {
           name: "VaR (99%)",
           type: "line",
           data: data.var99,
           smooth: true,
-          lineStyle: { width: 2, color: "#bf00ff" },
           symbol: "none",
+          lineStyle: { width: 2, color: PURPLE },
         },
         {
           name: "实际损失",
           type: "scatter",
+          symbolSize: 6,
           data: data.actualLoss.map((loss, i) => ({
             value: loss,
             itemStyle: {
-              color: loss < data.var99[i] ? "#ff4757" : "#00ff88",
+              color: loss < data.var99[i] ? LOSS_COLOR : GAIN_COLOR,
             },
           })),
-          symbolSize: 6,
         },
       ],
-    };
-
-    chartInstance.current.setOption(option);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, [data]);
+    }),
+    [data.dates, data.var95, data.var99, data.actualLoss],
+  );
 
   return (
-    <div
-      ref={chartRef}
-      style={{ width: "100%", height }}
-      className="rounded-clay-sm"
+    <ReactEChartsCore
+      echarts={echarts}
+      option={option}
+      style={{ height, width: "100%" }}
+      notMerge
+      lazyUpdate
     />
   );
 }
 
-// 生成模拟VaR数据
-export function generateMockVaRData(days: number = 60) {
-  const dates: string[] = [];
-  const var95: number[] = [];
-  const var99: number[] = [];
-  const actualLoss: number[] = [];
-
-  const baseDate = new Date("2024-11-01");
-
+export function generateMockVaRData(days = 60) {
+  const dates: string[] = [],
+    var95: number[] = [],
+    var99: number[] = [],
+    actualLoss: number[] = [];
+  const base = new Date("2024-11-01");
   for (let i = 0; i < days; i++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() + i);
-    dates.push(date.toISOString().split("T")[0]);
-
-    // VaR随时间波动
-    const baseVar = -0.02 + Math.sin(i / 10) * 0.005 + (Math.random() - 0.5) * 0.005;
-    var95.push(baseVar);
-    var99.push(baseVar * 1.5);
-
-    // 实际损失：大部分在VaR内，偶尔超出
-    const loss = (Math.random() - 0.6) * 0.03;
-    actualLoss.push(Math.min(0, loss));
+    const d = new Date(base);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]);
+    const bv = -0.02 + Math.sin(i / 10) * 0.005 + (Math.random() - 0.5) * 0.005;
+    var95.push(bv);
+    var99.push(bv * 1.5);
+    actualLoss.push(Math.min(0, (Math.random() - 0.6) * 0.03));
   }
-
   return { dates, var95, var99, actualLoss };
 }

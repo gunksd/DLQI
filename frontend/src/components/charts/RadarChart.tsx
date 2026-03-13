@@ -1,100 +1,73 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useMemo } from "react";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+import { echarts } from "./echarts-setup";
+import { BLUE, PURPLE, AMBER, GAIN_COLOR } from "./theme";
 
 interface RadarChartProps {
   data: {
     indicators: { name: string; max: number }[];
-    models: {
-      name: string;
-      values: number[];
-      color: string;
-    }[];
+    models: { name: string; values: number[]; color: string }[];
   };
   height?: number;
 }
 
 export function RadarChart({ data, height = 350 }: RadarChartProps) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current, "dark");
-
-    const option: echarts.EChartsOption = {
+  const option = useMemo(
+    () => ({
       backgroundColor: "transparent",
+      animation: false,
       legend: {
         data: data.models.map((m) => m.name),
-        top: 10,
-        textStyle: { color: "#94a3b8" },
+        top: 5,
+        textStyle: { color: "#9CA3AF", fontSize: 11 },
       },
       tooltip: {
         trigger: "item",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textStyle: { color: "#f1f5f9" },
+        backgroundColor: "#1F2937",
+        borderColor: "#374151",
+        textStyle: { color: "#F9FAFB", fontSize: 11 },
       },
       radar: {
         indicator: data.indicators,
-        shape: "polygon",
+        shape: "polygon" as const,
         splitNumber: 5,
-        axisName: {
-          color: "#94a3b8",
-          fontSize: 11,
-        },
-        splitLine: {
-          lineStyle: { color: "#334155" },
-        },
+        axisName: { color: "#9CA3AF", fontSize: 11 },
+        splitLine: { lineStyle: { color: "#1F2937" } },
         splitArea: {
           show: true,
-          areaStyle: {
-            color: ["rgba(30, 41, 59, 0.5)", "rgba(30, 41, 59, 0.3)"],
-          },
+          areaStyle: { color: ["#11182780", "#11182740"] },
         },
-        axisLine: {
-          lineStyle: { color: "#334155" },
-        },
+        axisLine: { lineStyle: { color: "#1F2937" } },
       },
       series: [
         {
           type: "radar",
-          data: data.models.map((model) => ({
-            name: model.name,
-            value: model.values,
-            lineStyle: { width: 2, color: model.color },
-            areaStyle: { color: `${model.color}33` },
-            itemStyle: { color: model.color },
+          data: data.models.map((m) => ({
+            name: m.name,
+            value: m.values,
+            lineStyle: { width: 2, color: m.color },
+            areaStyle: { color: m.color + "33" },
+            itemStyle: { color: m.color },
           })),
         },
       ],
-    };
-
-    chartInstance.current.setOption(option);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, [data]);
+    }),
+    [data.indicators, data.models],
+  );
 
   return (
-    <div
-      ref={chartRef}
-      style={{ width: "100%", height }}
-      className="rounded-clay-sm"
+    <ReactEChartsCore
+      echarts={echarts}
+      option={option}
+      style={{ height, width: "100%" }}
+      notMerge
+      lazyUpdate
     />
   );
 }
 
-// 生成模拟雷达图数据
 export function generateMockRadarData() {
   return {
     indicators: [
@@ -109,22 +82,22 @@ export function generateMockRadarData() {
       {
         name: "LSTM",
         values: [68.5, 67.2, 69.8, 68.5, 1.42, 56.8],
-        color: "#00f5ff",
+        color: BLUE,
       },
       {
         name: "Transformer",
         values: [70.2, 69.5, 71.0, 70.2, 1.48, 58.2],
-        color: "#bf00ff",
+        color: PURPLE,
       },
       {
         name: "LightGBM",
         values: [65.2, 64.8, 65.6, 65.2, 1.28, 54.5],
-        color: "#ffa502",
+        color: AMBER,
       },
       {
         name: "集成模型",
         values: [71.2, 70.5, 71.8, 71.2, 1.56, 59.5],
-        color: "#00ff88",
+        color: GAIN_COLOR,
       },
     ],
   };

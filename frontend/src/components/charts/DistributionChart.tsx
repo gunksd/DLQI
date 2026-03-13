@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useMemo } from "react";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+import { echarts } from "./echarts-setup";
+import { GAIN_COLOR, LOSS_COLOR } from "./theme";
 
 interface DistributionChartProps {
-  data: {
-    bins: string[];
-    counts: number[];
-  };
+  data: { bins: string[]; counts: number[] };
   height?: number;
   title?: string;
 }
@@ -15,105 +14,94 @@ interface DistributionChartProps {
 export function DistributionChart({
   data,
   height = 250,
-  title = "收益分布",
+  title,
 }: DistributionChartProps) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current, "dark");
-
-    const option: echarts.EChartsOption = {
+  const option = useMemo(
+    () => ({
       backgroundColor: "transparent",
-      title: {
-        text: title,
-        left: "center",
-        top: 0,
-        textStyle: { color: "#f1f5f9", fontSize: 14 },
-      },
+      animation: false,
+      ...(title
+        ? {
+            title: {
+              text: title,
+              left: "center",
+              top: 0,
+              textStyle: { color: "#F9FAFB", fontSize: 13, fontWeight: 500 },
+            },
+          }
+        : {}),
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textStyle: { color: "#f1f5f9" },
+        backgroundColor: "#1F2937",
+        borderColor: "#374151",
+        textStyle: { color: "#F9FAFB", fontSize: 11 },
       },
-      grid: {
-        left: "10%",
-        right: "5%",
-        top: 40,
-        bottom: 30,
-      },
+      grid: { left: 50, right: 20, top: title ? 35 : 15, bottom: 30 },
       xAxis: {
         type: "category",
         data: data.bins,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8", fontSize: 10 },
-        splitLine: { show: false },
+        axisLine: { lineStyle: { color: "#1F2937" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
       },
       yAxis: {
         type: "value",
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8" },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
+        splitLine: { lineStyle: { color: "#1F293740" } },
       },
       series: [
         {
           type: "bar",
-          data: data.counts.map((count, index) => ({
+          barWidth: "60%",
+          data: data.counts.map((count, i) => ({
             value: count,
             itemStyle: {
               color:
-                parseFloat(data.bins[index]) >= 0
+                parseFloat(data.bins[i]) >= 0
                   ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                      { offset: 0, color: "#00ff88" },
-                      { offset: 1, color: "rgba(0, 255, 136, 0.3)" },
+                      { offset: 0, color: GAIN_COLOR },
+                      { offset: 1, color: GAIN_COLOR + "40" },
                     ])
                   : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                      { offset: 0, color: "#ff4757" },
-                      { offset: 1, color: "rgba(255, 71, 87, 0.3)" },
+                      { offset: 0, color: LOSS_COLOR },
+                      { offset: 1, color: LOSS_COLOR + "40" },
                     ]),
             },
           })),
-          barWidth: "60%",
         },
       ],
-    };
-
-    chartInstance.current.setOption(option);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, [data, title]);
+    }),
+    [data.bins, data.counts, title],
+  );
 
   return (
-    <div
-      ref={chartRef}
-      style={{ width: "100%", height }}
-      className="rounded-clay-sm"
+    <ReactEChartsCore
+      echarts={echarts}
+      option={option}
+      style={{ height, width: "100%" }}
+      notMerge
+      lazyUpdate
     />
   );
 }
 
-// 生成模拟分布数据
 export function generateMockDistributionData() {
-  const bins = ["-5%", "-4%", "-3%", "-2%", "-1%", "0%", "1%", "2%", "3%", "4%", "5%"];
+  const bins = [
+    "-5%",
+    "-4%",
+    "-3%",
+    "-2%",
+    "-1%",
+    "0%",
+    "1%",
+    "2%",
+    "3%",
+    "4%",
+    "5%",
+  ];
   const counts = bins.map(() => Math.floor(Math.random() * 50) + 10);
-
-  // 使分布呈正态形状
   const center = Math.floor(bins.length / 2);
   for (let i = 0; i < bins.length; i++) {
-    const distance = Math.abs(i - center);
-    counts[i] = Math.floor(counts[i] * (1 - distance * 0.15));
+    counts[i] = Math.floor(counts[i] * (1 - Math.abs(i - center) * 0.15));
   }
-
   return { bins, counts };
 }

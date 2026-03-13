@@ -67,10 +67,10 @@ async def compare_models(
     """对比同一股票的不同模型，结合回测结果"""
     mgr = _get_manager()
     import os, csv
-    results_path = os.path.join(os.getenv("DATA_DIR", "./data"), "..", "results", "backtest_results.csv")
+    results_path = os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "backtest_results.csv")
     # 尝试多个可能路径
     for p in [results_path,
-              "/data/results/backtest_results.csv",
+              "../results/backtest_results.csv",
               "./results/backtest_results.csv",
               "/app/results/backtest_results.csv"]:
         if os.path.isfile(p):

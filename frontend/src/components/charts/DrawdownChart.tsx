@@ -1,124 +1,82 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import { useMemo } from "react";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+import { echarts } from "./echarts-setup";
+import { LOSS_COLOR } from "./theme";
 
 interface DrawdownChartProps {
-  data: {
-    dates: string[];
-    drawdown: number[];
-  };
+  data: { dates: string[]; drawdown: number[] };
   height?: number;
 }
 
 export function DrawdownChart({ data, height = 250 }: DrawdownChartProps) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current, "dark");
-
-    const option: echarts.EChartsOption = {
+  const option = useMemo(
+    () => ({
       backgroundColor: "transparent",
+      animation: false,
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textStyle: { color: "#f1f5f9" },
-        formatter: (params: any) => {
-          const data = params[0];
-          return `
-            <div style="font-size: 12px;">
-              <div style="margin-bottom: 4px;">${data.axisValue}</div>
-              <div>回撤: <span style="color: #ff4757">${(data.value * 100).toFixed(2)}%</span></div>
-            </div>
-          `;
-        },
+        backgroundColor: "#1F2937",
+        borderColor: "#374151",
+        textStyle: { color: "#F9FAFB", fontSize: 11 },
       },
-      grid: {
-        left: "10%",
-        right: "5%",
-        top: 20,
-        bottom: 40,
-      },
+      grid: { left: 60, right: 20, top: 15, bottom: 30 },
       xAxis: {
         type: "category",
         data: data.dates,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8", fontSize: 10 },
-        splitLine: { show: false },
+        axisLine: { lineStyle: { color: "#1F2937" } },
+        axisLabel: { color: "#6B7280", fontSize: 10 },
       },
       yAxis: {
         type: "value",
         max: 0,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: {
-          color: "#94a3b8",
-          formatter: (value: number) => `${(value * 100).toFixed(0)}%`,
-        },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLabel: { color: "#6B7280", fontSize: 10, formatter: "{value}" },
+        splitLine: { lineStyle: { color: "#1F293740" } },
       },
       series: [
         {
           type: "line",
           data: data.drawdown,
           smooth: true,
-          lineStyle: { width: 2, color: "#ff4757" },
+          symbol: "none",
+          lineStyle: { width: 2, color: LOSS_COLOR },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "rgba(255, 71, 87, 0)" },
-              { offset: 1, color: "rgba(255, 71, 87, 0.3)" },
+              { offset: 0, color: LOSS_COLOR + "00" },
+              { offset: 1, color: LOSS_COLOR + "40" },
             ]),
           },
-          symbol: "none",
         },
       ],
-    };
-
-    chartInstance.current.setOption(option);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, [data]);
+    }),
+    [data.dates, data.drawdown],
+  );
 
   return (
-    <div
-      ref={chartRef}
-      style={{ width: "100%", height }}
-      className="rounded-clay-sm"
+    <ReactEChartsCore
+      echarts={echarts}
+      option={option}
+      style={{ height, width: "100%" }}
+      notMerge
+      lazyUpdate
     />
   );
 }
 
-// 生成模拟回撤数据
-export function generateMockDrawdownData(days: number = 365) {
-  const dates: string[] = [];
-  const drawdown: number[] = [];
-
-  let peak = 1;
-  let current = 1;
-  const baseDate = new Date("2024-01-01");
-
+export function generateMockDrawdownData(days = 365) {
+  const dates: string[] = [],
+    drawdown: number[] = [];
+  let peak = 1,
+    current = 1;
+  const base = new Date("2024-01-01");
   for (let i = 0; i < days; i++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() + i);
-    dates.push(date.toISOString().split("T")[0]);
-
-    // 模拟收益变化
+    const d = new Date(base);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]);
     current *= 1 + (Math.random() - 0.48) * 0.02;
     peak = Math.max(peak, current);
-    const dd = (current - peak) / peak;
-    drawdown.push(dd);
+    drawdown.push((current - peak) / peak);
   }
-
   return { dates, drawdown };
 }

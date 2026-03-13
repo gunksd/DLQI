@@ -8,8 +8,70 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 import csv
+import json
+import subprocess
+import threading
 
 router = APIRouter()
+
+# ==================== Pipeline 运行状态 ====================
+
+_pipeline_status: Dict[str, Any] = {
+    "running": False,
+    "last_run": None,
+    "progress": "",
+    "error": None,
+}
+_pipeline_lock = threading.Lock()
+
+
+def _run_pipeline_background():
+    """在后台线程中运行 pipeline"""
+    global _pipeline_status
+    try:
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        venv_python = os.path.join(root_dir, "backend", "venv", "bin", "python")
+        script = os.path.join(root_dir, "scripts", "run_pipeline.py")
+
+        if not os.path.isfile(venv_python):
+            venv_python = "python3"
+        if not os.path.isfile(script):
+            with _pipeline_lock:
+                _pipeline_status["running"] = False
+                _pipeline_status["error"] = f"Pipeline 脚本不存在: {script}"
+            return
+
+        with _pipeline_lock:
+            _pipeline_status["progress"] = "正在运行 pipeline..."
+
+        result = subprocess.run(
+            [venv_python, script],
+            cwd=root_dir,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+
+        with _pipeline_lock:
+            _pipeline_status["running"] = False
+            _pipeline_status["last_run"] = datetime.now().isoformat()
+            if result.returncode == 0:
+                _pipeline_status["progress"] = "完成"
+                _pipeline_status["error"] = None
+            else:
+                _pipeline_status["error"] = result.stderr[-500:] if result.stderr else "未知错误"
+                _pipeline_status["progress"] = "失败"
+
+    except subprocess.TimeoutExpired:
+        with _pipeline_lock:
+            _pipeline_status["running"] = False
+            _pipeline_status["error"] = "Pipeline 运行超时 (>10分钟)"
+            _pipeline_status["progress"] = "超时"
+    except Exception as e:
+        with _pipeline_lock:
+            _pipeline_status["running"] = False
+            _pipeline_status["error"] = str(e)
+            _pipeline_status["progress"] = "异常"
 
 
 # ==================== 请求模型 ====================
@@ -27,10 +89,11 @@ class BacktestRequest(BaseModel):
 def _find_results_csv() -> Optional[str]:
     """找到 backtest_results.csv"""
     candidates = [
+        "../results/backtest_results.csv",
         "./results/backtest_results.csv",
         "/app/results/backtest_results.csv",
         "/data/results/backtest_results.csv",
-        os.path.join(os.getenv("DATA_DIR", "./data"), "..", "results", "backtest_results.csv"),
+        os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "backtest_results.csv"),
     ]
     for p in candidates:
         if os.path.isfile(p):
@@ -89,6 +152,29 @@ def _format_result(row: dict, idx: int) -> dict:
 
 
 # ==================== API 端点 ====================
+
+@router.post("/run")
+async def run_pipeline():
+    """触发 pipeline 运行（训练 → 预测 → 回测 → 分析）"""
+    global _pipeline_status
+    with _pipeline_lock:
+        if _pipeline_status["running"]:
+            raise HTTPException(status_code=409, detail="Pipeline 正在运行中，请等待完成")
+        _pipeline_status["running"] = True
+        _pipeline_status["error"] = None
+        _pipeline_status["progress"] = "启动中..."
+
+    t = threading.Thread(target=_run_pipeline_background, daemon=True)
+    t.start()
+    return {"message": "Pipeline 已启动", "status": "running"}
+
+
+@router.get("/status")
+async def get_pipeline_status():
+    """获取 pipeline 运行状态"""
+    with _pipeline_lock:
+        return dict(_pipeline_status)
+
 
 @router.get("/")
 async def get_backtest_results(
@@ -185,6 +271,82 @@ async def get_sharpe_heatmap():
         })
 
     return {"symbols": symbols, "model_types": model_types, "data": data}
+
+
+@router.get("/analysis")
+async def get_model_analysis():
+    """返回最佳模型分析报告"""
+    candidates = [
+        "../results/model_analysis.json",
+        "./results/model_analysis.json",
+        os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "model_analysis.json"),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            with open(p) as f:
+                return json.load(f)
+    raise HTTPException(status_code=404, detail="分析报告未生成，请先运行 pipeline")
+
+
+@router.get("/correlation")
+async def get_correlation_matrix():
+    """计算股票收益率相关性矩阵"""
+    import pandas as pd
+    import numpy as np
+    data_dir = os.getenv("DATA_DIR", "../data")
+    raw_dir = os.path.join(data_dir, "raw")
+
+    symbols = []
+    returns_dict = {}
+
+    if os.path.isdir(raw_dir):
+        for f in sorted(os.listdir(raw_dir)):
+            if f.startswith("us_") and f.endswith(".csv") and "idx_" not in f:
+                sym = f.replace("us_", "").replace(".csv", "")
+                try:
+                    df = pd.read_csv(os.path.join(raw_dir, f))
+                    rets = df['close'].pct_change().dropna().tolist()
+                    if rets:
+                        symbols.append(sym)
+                        returns_dict[sym] = rets
+                except Exception:
+                    pass
+
+    if len(symbols) < 2:
+        return {"xLabels": [], "yLabels": [], "values": []}
+
+    min_len = min(len(v) for v in returns_dict.values())
+    data = np.array([returns_dict[s][-min_len:] for s in symbols])
+    corr = np.corrcoef(data)
+
+    values = []
+    for x in range(len(symbols)):
+        for y in range(len(symbols)):
+            values.append([x, y, round(float(corr[y][x]), 4)])
+
+    return {"xLabels": symbols, "yLabels": symbols, "values": values}
+
+
+def _find_equity_curve(model_id: str) -> Optional[str]:
+    candidates = [
+        f"../results/equity_curves/{model_id}.json",
+        f"./results/equity_curves/{model_id}.json",
+        os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "equity_curves", f"{model_id}.json"),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+@router.get("/{model_id}/equity-curve")
+async def get_equity_curve(model_id: str):
+    """获取模型的每日资金曲线"""
+    path = _find_equity_curve(model_id)
+    if not path:
+        raise HTTPException(status_code=404, detail=f"未找到 {model_id} 的资金曲线数据")
+    with open(path) as f:
+        return json.load(f)
 
 
 @router.get("/{model_id}")

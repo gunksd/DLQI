@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     ]
 
     # 模型配置
-    MODEL_DIR: str = os.getenv("MODEL_DIR", "./models")
-    DATA_DIR: str = os.getenv("DATA_DIR", "./data")
+    MODEL_DIR: str = os.getenv("MODEL_DIR", "../data/models")
+    DATA_DIR: str = os.getenv("DATA_DIR", "../data")
 
     # 回测配置
     DEFAULT_INITIAL_CAPITAL: float = 1000000.0

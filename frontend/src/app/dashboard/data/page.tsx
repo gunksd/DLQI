@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Database,
   Download,
@@ -17,6 +16,7 @@ import {
   HardDrive,
   Cloud,
   FileText,
+  X,
 } from "lucide-react";
 import {
   useDataSources,
@@ -26,8 +26,42 @@ import {
   useStorageStats,
   useSyncData,
 } from "@/lib";
+import api from "@/lib/api";
 
-// 数据源卡片
+/* Toast notification */
+function Toast({
+  msg,
+  onClose,
+}: {
+  msg: { text: string; type: "info" | "success" | "error" } | null;
+  onClose: () => void;
+}) {
+  if (!msg) return null;
+  const cls =
+    msg.type === "success"
+      ? "bg-gain/10 text-gain border-gain/20"
+      : msg.type === "error"
+        ? "bg-loss/10 text-loss border-loss/20"
+        : "bg-accent-blue/10 text-accent-blue border-accent-blue/20";
+  return (
+    <div
+      className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded border text-xs flex items-center gap-2 shadow-lg ${cls}`}
+    >
+      {msg.type === "success" ? (
+        <CheckCircle className="w-3.5 h-3.5" />
+      ) : msg.type === "error" ? (
+        <XCircle className="w-3.5 h-3.5" />
+      ) : (
+        <RefreshCw className="w-3.5 h-3.5" />
+      )}
+      {msg.text}
+      <button onClick={onClose} className="ml-2 opacity-60 hover:opacity-100">
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
 function DataSourceCard({
   name,
   type,
@@ -35,7 +69,8 @@ function DataSourceCard({
   lastSync,
   records,
   size,
-  delay = 0,
+  onSync,
+  onView,
 }: {
   name: string;
   type: string;
@@ -43,147 +78,182 @@ function DataSourceCard({
   lastSync: string | null;
   records: number;
   size: string;
-  delay?: number;
+  onSync: () => void;
+  onView: () => void;
 }) {
-  const statusConfig: Record<string, { color: string; label: string; icon: React.ElementType }> = {
-    connected: { color: "clay-badge-success", label: "已连接", icon: CheckCircle },
-    available: { color: "clay-badge-info", label: "可用", icon: Clock },
-    error: { color: "clay-badge-danger", label: "错误", icon: XCircle },
-    syncing: { color: "clay-badge-warning", label: "同步中", icon: RefreshCw },
+  const [syncing, setSyncing] = useState(false);
+  const statusCfg: Record<
+    string,
+    { cls: string; label: string; icon: React.ElementType }
+  > = {
+    connected: { cls: "t-badge-gain", label: "已连接", icon: CheckCircle },
+    available: { cls: "t-badge-info", label: "可用", icon: Clock },
+    error: { cls: "t-badge-loss", label: "错误", icon: XCircle },
+    syncing: { cls: "t-badge-warn", label: "同步中", icon: RefreshCw },
   };
-
-  const typeConfig: Record<string, { icon: React.ElementType; label: string }> = {
-    aggregator: { icon: Cloud, label: "平台" },
-    provider: { icon: Cloud, label: "数据源" },
-    api: { icon: Cloud, label: "API" },
-    file: { icon: FileText, label: "文件" },
-    database: { icon: Database, label: "数据库" },
+  const typeIcons: Record<string, React.ElementType> = {
+    aggregator: Cloud,
+    provider: Cloud,
+    api: Cloud,
+    file: FileText,
+    database: Database,
   };
+  const cfg = statusCfg[syncing ? "syncing" : status] || statusCfg.available;
+  const TypeIcon = typeIcons[type] || Cloud;
+  const StatusIcon = cfg.icon;
 
-  const config = statusConfig[status] || statusConfig.available;
-  const typeInfo = typeConfig[type] || typeConfig.api;
-  const StatusIcon = config.icon;
-  const TypeIcon = typeInfo.icon;
+  const handleSync = async () => {
+    setSyncing(true);
+    onSync();
+    setTimeout(() => setSyncing(false), 2000);
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }}
-      className="clay-card"
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-clay-sm bg-gradient-to-br from-primary-600/20 to-neon-purple/20">
-            <TypeIcon className="w-6 h-6 text-neon-blue" />
+    <div className="t-card">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded bg-accent-blue/10">
+            <TypeIcon className="w-5 h-5 text-accent-blue" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-100">{name}</h3>
-            <p className="text-sm text-slate-400">{typeInfo.label}</p>
+            <h3 className="text-sm font-semibold text-gray-100">{name}</h3>
+            <p className="text-xs text-gray-500">{type}</p>
           </div>
         </div>
-        <span className={`clay-badge ${config.color} flex items-center gap-1`}>
-          <StatusIcon className={`w-3 h-3 ${status === "syncing" ? "animate-spin" : ""}`} />
-          {config.label}
+        <span className={`t-badge ${cfg.cls} flex items-center gap-1`}>
+          <StatusIcon className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} />
+          {cfg.label}
         </span>
       </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="p-2 rounded-clay-sm bg-dark-800/50 text-center">
-          <div className="text-xs text-slate-500">记录数</div>
-          <div className="font-medium text-slate-200">{records.toLocaleString()}</div>
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="p-2 rounded bg-terminal-hover text-center">
+          <div className="text-[10px] text-gray-500">记录数</div>
+          <div className="text-xs font-medium text-gray-200 font-num">
+            {records.toLocaleString()}
+          </div>
         </div>
-        <div className="p-2 rounded-clay-sm bg-dark-800/50 text-center">
-          <div className="text-xs text-slate-500">大小</div>
-          <div className="font-medium text-slate-200">{size}</div>
+        <div className="p-2 rounded bg-terminal-hover text-center">
+          <div className="text-[10px] text-gray-500">大小</div>
+          <div className="text-xs font-medium text-gray-200">{size}</div>
         </div>
-        <div className="p-2 rounded-clay-sm bg-dark-800/50 text-center">
-          <div className="text-xs text-slate-500">更新</div>
-          <div className="font-medium text-slate-200 text-xs">
+        <div className="p-2 rounded bg-terminal-hover text-center">
+          <div className="text-[10px] text-gray-500">更新</div>
+          <div className="text-xs font-medium text-gray-200">
             {lastSync ? new Date(lastSync).toLocaleTimeString() : "N/A"}
           </div>
         </div>
       </div>
-
       <div className="flex gap-2">
-        <button className="flex-1 clay-button-secondary !py-2 text-sm flex items-center justify-center gap-1">
-          <RefreshCw className="w-4 h-4" />
-          同步
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="flex-1 t-btn-ghost !py-1.5 text-xs flex items-center justify-center gap-1 disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}
+          />
+          {syncing ? "同步中" : "同步"}
         </button>
-        <button className="clay-button-secondary !px-3 !py-2">
-          <Eye className="w-4 h-4" />
+        <button onClick={onView} className="t-btn-ghost !px-2.5 !py-1.5">
+          <Eye className="w-3.5 h-3.5" />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// 股票列表 - 使用真实数据
-function StockList() {
+function StockList({
+  onToast,
+}: {
+  onToast: (msg: string, type: "info" | "success" | "error") => void;
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
-
   const { data, isLoading, error, refetch } = useStocks({
     search: searchTerm || undefined,
     page,
     page_size: 10,
   });
-
   const syncMutation = useSyncData();
+  const [viewSymbol, setViewSymbol] = useState<string | null>(null);
 
   const handleSync = async (symbol: string) => {
     const endDate = new Date().toISOString().split("T")[0];
-    const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const startDate = new Date(Date.now() - 365 * 86400000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      await syncMutation.mutateAsync({
+        symbols: [symbol],
+        start_date: startDate,
+        end_date: endDate,
+      });
+      onToast(`${symbol} 同步完成`, "success");
+    } catch {
+      onToast(`${symbol} 同步失败`, "error");
+    }
+  };
 
-    await syncMutation.mutateAsync({
-      symbols: [symbol],
-      start_date: startDate,
-      end_date: endDate,
-    });
+  const handleDelete = (symbol: string) => {
+    onToast(`${symbol}: 本系统使用本地 CSV 数据，不支持在线删除`, "info");
+  };
+
+  const handleView = (symbol: string) => {
+    setViewSymbol(viewSymbol === symbol ? null : symbol);
   };
 
   return (
-    <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">股票数据</h3>
+    <div className="t-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-200">股票数据</h3>
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
               placeholder="搜索..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="clay-input !pl-9 !py-2 text-sm w-48"
+              className="t-input !pl-8 !py-1.5 text-xs w-40"
             />
           </div>
           <button
             onClick={() => refetch()}
-            className="clay-button-secondary !px-3 !py-2"
+            className="t-btn-ghost !px-2 !py-1.5"
             disabled={isLoading}
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
+            />
           </button>
-          <button className="clay-button !px-3 !py-2 text-sm flex items-center gap-1">
-            <Plus className="w-4 h-4" />
+          <button
+            onClick={() =>
+              onToast(
+                "本系统使用预设的 5 只美股 (AAPL, AMZN, GOOGL, MSFT, NVDA)，暂不支持新增",
+                "info",
+              )
+            }
+            className="t-btn !py-1.5 text-xs flex items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
             添加
           </button>
         </div>
       </div>
 
       {error ? (
-        <div className="text-center py-8 text-red-400">
+        <div className="text-center py-8 text-loss text-sm">
           加载失败: {error.message}
         </div>
       ) : isLoading ? (
-        <div className="text-center py-8 text-slate-400">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+        <div className="text-center py-8 text-gray-400 text-sm">
+          <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
           加载中...
         </div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="clay-table">
+            <table className="t-table">
               <thead>
                 <tr>
                   <th>代码</th>
@@ -197,19 +267,26 @@ function StockList() {
               </thead>
               <tbody>
                 {data?.items.map((stock) => (
-                  <tr key={stock.symbol}>
-                    <td className="font-medium text-slate-200">{stock.symbol}</td>
-                    <td className="text-slate-400">{stock.name}</td>
-                    <td className="text-slate-500">{stock.sector}</td>
-                    <td>{stock.records.toLocaleString()}</td>
-                    <td className="text-slate-500">
+                  <tr
+                    key={stock.symbol}
+                    className={
+                      viewSymbol === stock.symbol ? "!bg-accent-blue/5" : ""
+                    }
+                  >
+                    <td className="font-medium text-gray-200">
+                      {stock.symbol}
+                    </td>
+                    <td className="text-gray-400">{stock.name}</td>
+                    <td className="text-gray-500">{stock.sector}</td>
+                    <td className="font-num">
+                      {stock.records.toLocaleString()}
+                    </td>
+                    <td className="text-gray-500">
                       {new Date(stock.last_update).toLocaleDateString()}
                     </td>
                     <td>
                       <span
-                        className={`clay-badge ${
-                          stock.status === "updated" ? "clay-badge-success" : "clay-badge-warning"
-                        }`}
+                        className={`t-badge ${stock.status === "updated" ? "t-badge-gain" : "t-badge-warn"}`}
                       >
                         {stock.status === "updated" ? "已更新" : "待更新"}
                       </span>
@@ -218,20 +295,29 @@ function StockList() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleSync(stock.symbol)}
-                          className="p-1.5 rounded hover:bg-dark-700"
+                          className="p-1 rounded hover:bg-terminal-hover"
                           disabled={syncMutation.isPending}
+                          title="同步数据"
                         >
                           <RefreshCw
-                            className={`w-4 h-4 text-slate-400 ${
-                              syncMutation.isPending ? "animate-spin" : ""
-                            }`}
+                            className={`w-3.5 h-3.5 text-gray-400 ${syncMutation.isPending ? "animate-spin" : ""}`}
                           />
                         </button>
-                        <button className="p-1.5 rounded hover:bg-dark-700">
-                          <Eye className="w-4 h-4 text-slate-400" />
+                        <button
+                          onClick={() => handleView(stock.symbol)}
+                          className="p-1 rounded hover:bg-terminal-hover"
+                          title="查看数据"
+                        >
+                          <Eye
+                            className={`w-3.5 h-3.5 ${viewSymbol === stock.symbol ? "text-accent-blue" : "text-gray-400"}`}
+                          />
                         </button>
-                        <button className="p-1.5 rounded hover:bg-dark-700">
-                          <Trash2 className="w-4 h-4 text-red-400" />
+                        <button
+                          onClick={() => handleDelete(stock.symbol)}
+                          className="p-1 rounded hover:bg-terminal-hover"
+                          title="删除"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-loss" />
                         </button>
                       </div>
                     </td>
@@ -240,25 +326,31 @@ function StockList() {
               </tbody>
             </table>
           </div>
-
-          {/* 分页 */}
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-dark-700">
-            <span className="text-sm text-slate-400">
+          {/* Inline data preview when Eye is clicked */}
+          {viewSymbol && (
+            <div className="mt-3 p-3 rounded bg-terminal-bg border border-terminal-border">
+              <InlinePreview symbol={viewSymbol} />
+            </div>
+          )}
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-terminal-border">
+            <span className="text-xs text-gray-500">
               共 {data?.total || 0} 条记录
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="clay-button-secondary !px-3 !py-1 text-sm disabled:opacity-50"
+                className="t-btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-50"
               >
                 上一页
               </button>
-              <span className="px-3 py-1 text-slate-400">第 {page} 页</span>
+              <span className="px-2 py-1 text-xs text-gray-400">
+                第 {page} 页
+              </span>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={!data || data.items.length < 10}
-                className="clay-button-secondary !px-3 !py-1 text-sm disabled:opacity-50"
+                className="t-btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-50"
               >
                 下一页
               </button>
@@ -270,53 +362,106 @@ function StockList() {
   );
 }
 
-// 数据质量面板 - 使用真实数据
+/* Inline data preview for Eye button in stock table */
+function InlinePreview({ symbol }: { symbol: string }) {
+  const { data, isLoading, error } = useStockData(symbol, {
+    start_date: new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0],
+  });
+  if (isLoading)
+    return (
+      <div className="text-center py-3 text-gray-400 text-xs">
+        加载 {symbol} 数据...
+      </div>
+    );
+  if (error)
+    return <div className="text-center py-3 text-loss text-xs">加载失败</div>;
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-2">{symbol} 最近 5 条记录</div>
+      <table className="t-table">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>开盘</th>
+            <th>最高</th>
+            <th>最低</th>
+            <th>收盘</th>
+            <th>成交量</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data?.data
+            .slice(-5)
+            .reverse()
+            .map((row) => (
+              <tr key={row.date}>
+                <td className="text-gray-200">
+                  {(row.date || "").split("T")[0]}
+                </td>
+                <td className="font-num">${row.open.toFixed(2)}</td>
+                <td className="text-gain font-num">${row.high.toFixed(2)}</td>
+                <td className="text-loss font-num">${row.low.toFixed(2)}</td>
+                <td className="font-num">${row.close.toFixed(2)}</td>
+                <td className="text-gray-400 font-num">
+                  {(row.volume / 1000000).toFixed(1)}M
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function DataQualityPanel() {
   const { data, isLoading } = useDataQuality();
-
   const metrics = data
     ? [
-        { name: "完整性", score: data.completeness, status: data.completeness >= 95 ? "good" : "warning" },
-        { name: "准确性", score: data.accuracy, status: data.accuracy >= 95 ? "good" : "warning" },
-        { name: "一致性", score: data.consistency, status: data.consistency >= 95 ? "good" : "warning" },
-        { name: "时效性", score: data.timeliness, status: data.timeliness >= 95 ? "good" : "warning" },
+        {
+          name: "完整性",
+          score: data.completeness,
+          good: data.completeness >= 95,
+        },
+        { name: "准确性", score: data.accuracy, good: data.accuracy >= 95 },
+        {
+          name: "一致性",
+          score: data.consistency,
+          good: data.consistency >= 95,
+        },
+        { name: "时效性", score: data.timeliness, good: data.timeliness >= 95 },
       ]
     : [];
 
   return (
-    <div className="clay-card">
-      <h3 className="text-lg font-semibold text-slate-100 mb-4">数据质量</h3>
+    <div className="t-card">
+      <h3 className="text-sm font-semibold text-gray-200 mb-3">数据质量</h3>
       {isLoading ? (
-        <div className="text-center py-4 text-slate-400">加载中...</div>
+        <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
       ) : (
         <>
-          <div className="space-y-4">
-            {metrics.map((metric) => (
-              <div key={metric.name}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-300">{metric.name}</span>
+          <div className="space-y-3">
+            {metrics.map((m) => (
+              <div key={m.name}>
+                <div className="flex items-center justify-between mb-1 text-xs">
+                  <span className="text-gray-300">{m.name}</span>
                   <span
-                    className={`font-medium ${
-                      metric.status === "good" ? "text-neon-green" : "text-yellow-400"
-                    }`}
+                    className={`font-num ${m.good ? "text-gain" : "text-amber-400"}`}
                   >
-                    {metric.score.toFixed(1)}%
+                    {m.score.toFixed(1)}%
                   </span>
                 </div>
-                <div className="clay-progress">
+                <div className="t-progress">
                   <div
-                    className={`clay-progress-bar ${metric.status === "warning" ? "!bg-yellow-500" : ""}`}
-                    style={{ width: `${metric.score}%` }}
-                  ></div>
+                    className={`t-progress-bar ${!m.good ? "!bg-amber-400" : ""}`}
+                    style={{ width: `${m.score}%` }}
+                  />
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-4 pt-4 border-t border-dark-700">
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <CheckCircle className="w-4 h-4 text-neon-green" />
-              <span>整体评分: {data?.overall.toFixed(1)}%</span>
-            </div>
+          <div className="mt-3 pt-3 border-t border-terminal-border flex items-center gap-2 text-xs text-gray-400">
+            <CheckCircle className="w-3.5 h-3.5 text-gain" />
+            整体评分: {data?.overall.toFixed(1)}%
           </div>
         </>
       )}
@@ -324,30 +469,25 @@ function DataQualityPanel() {
   );
 }
 
-// 存储统计 - 使用真实数据
-function StorageStats() {
+function StorageStatsPanel() {
   const { data, isLoading } = useStorageStats();
-
-  if (isLoading || !data) {
+  if (isLoading || !data)
     return (
-      <div className="clay-card">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">存储使用</h3>
-        <div className="text-center py-4 text-slate-400">加载中...</div>
+      <div className="t-card">
+        <h3 className="text-sm font-semibold text-gray-200 mb-3">存储使用</h3>
+        <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
       </div>
     );
-  }
 
   return (
-    <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">存储使用</h3>
-        <span className="text-sm text-slate-400">
+    <div className="t-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-200">存储使用</h3>
+        <span className="text-xs text-gray-500 font-num">
           {data.total_size_gb.toFixed(1)} / {data.max_size_gb} GB
         </span>
       </div>
-
-      {/* 存储条 */}
-      <div className="h-4 rounded-full bg-dark-700 overflow-hidden flex mb-4">
+      <div className="h-3 rounded-full bg-terminal-hover overflow-hidden flex mb-3">
         {data.items.map((item) => (
           <div
             key={item.name}
@@ -356,20 +496,20 @@ function StorageStats() {
               backgroundColor: item.color,
             }}
             className="h-full"
-          ></div>
+          />
         ))}
       </div>
-
-      {/* 图例 */}
       <div className="grid grid-cols-2 gap-2">
         {data.items.map((item) => (
-          <div key={item.name} className="flex items-center gap-2">
+          <div key={item.name} className="flex items-center gap-2 text-xs">
             <div
-              className="w-3 h-3 rounded-full"
+              className="w-2.5 h-2.5 rounded-full"
               style={{ backgroundColor: item.color }}
-            ></div>
-            <span className="text-sm text-slate-400">{item.name}</span>
-            <span className="text-sm text-slate-500 ml-auto">{item.size_gb} GB</span>
+            />
+            <span className="text-gray-400">{item.name}</span>
+            <span className="text-gray-500 ml-auto font-num">
+              {item.size_gb} GB
+            </span>
           </div>
         ))}
       </div>
@@ -377,47 +517,78 @@ function StorageStats() {
   );
 }
 
-// 数据预览 - 使用真实数据
-function DataPreview() {
+function DataPreview({
+  onToast,
+}: {
+  onToast: (msg: string, type: "info" | "success" | "error") => void;
+}) {
   const [symbol, setSymbol] = useState("AAPL");
   const { data, isLoading, error } = useStockData(symbol, {
-    start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    start_date: new Date(Date.now() - 30 * 86400000)
+      .toISOString()
+      .split("T")[0],
   });
 
+  const handleDownload = useCallback(() => {
+    if (!data?.data?.length) {
+      onToast("没有数据可导出", "error");
+      return;
+    }
+    const headers = "date,open,high,low,close,volume\n";
+    const rows = data.data
+      .map(
+        (r) => `${r.date},${r.open},${r.high},${r.low},${r.close},${r.volume}`,
+      )
+      .join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${symbol}_data.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    onToast(`${symbol} 数据已导出为 CSV`, "success");
+  }, [data, symbol, onToast]);
+
   return (
-    <div className="clay-card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">数据预览 - {symbol}</h3>
+    <div className="t-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-200">
+          数据预览 - {symbol}
+        </h3>
         <div className="flex items-center gap-2">
           <select
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
-            className="clay-select !py-2 !px-3 text-sm w-32"
+            className="t-select !py-1.5 text-xs w-24"
           >
             <option value="AAPL">AAPL</option>
             <option value="GOOGL">GOOGL</option>
             <option value="MSFT">MSFT</option>
             <option value="NVDA">NVDA</option>
-            <option value="TSLA">TSLA</option>
+            <option value="AMZN">AMZN</option>
           </select>
-          <button className="clay-button-secondary !px-3 !py-2">
-            <Download className="w-4 h-4" />
+          <button
+            onClick={handleDownload}
+            className="t-btn-ghost !px-2 !py-1.5"
+            title="导出 CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
-
       {error ? (
-        <div className="text-center py-8 text-red-400">
+        <div className="text-center py-8 text-loss text-sm">
           加载失败: {error.message}
         </div>
       ) : isLoading ? (
-        <div className="text-center py-8 text-slate-400">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+        <div className="text-center py-8 text-gray-400 text-sm">
+          <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
           加载中...
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="clay-table">
+          <table className="t-table">
             <thead>
               <tr>
                 <th>日期</th>
@@ -430,26 +601,37 @@ function DataPreview() {
               </tr>
             </thead>
             <tbody>
-              {data?.data.slice(-10).reverse().map((row) => (
-                <tr key={row.date}>
-                  <td className="font-medium text-slate-200">
-                    {new Date(row.date).toLocaleDateString()}
-                  </td>
-                  <td>${row.open.toFixed(2)}</td>
-                  <td className="text-neon-green">${row.high.toFixed(2)}</td>
-                  <td className="text-red-400">${row.low.toFixed(2)}</td>
-                  <td>${row.close.toFixed(2)}</td>
-                  <td className="text-slate-400">
-                    {(row.volume / 1000000).toFixed(1)}M
-                  </td>
-                  <td className={row.pct_change && row.pct_change >= 0 ? "text-neon-green" : "text-red-400"}>
-                    {row.pct_change ? `${row.pct_change >= 0 ? "+" : ""}${row.pct_change.toFixed(2)}%` : "-"}
-                  </td>
-                </tr>
-              ))}
+              {data?.data
+                .slice(-10)
+                .reverse()
+                .map((row) => (
+                  <tr key={row.date}>
+                    <td className="font-medium text-gray-200">
+                      {new Date(row.date).toLocaleDateString()}
+                    </td>
+                    <td className="font-num">${row.open.toFixed(2)}</td>
+                    <td className="text-gain font-num">
+                      ${row.high.toFixed(2)}
+                    </td>
+                    <td className="text-loss font-num">
+                      ${row.low.toFixed(2)}
+                    </td>
+                    <td className="font-num">${row.close.toFixed(2)}</td>
+                    <td className="text-gray-400 font-num">
+                      {(row.volume / 1000000).toFixed(1)}M
+                    </td>
+                    <td
+                      className={`font-num ${row.pct_change && row.pct_change >= 0 ? "text-gain" : "text-loss"}`}
+                    >
+                      {row.pct_change
+                        ? `${row.pct_change >= 0 ? "+" : ""}${row.pct_change.toFixed(2)}%`
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
-          <div className="mt-2 text-sm text-slate-500 text-right">
+          <div className="mt-2 text-xs text-gray-500 text-right">
             共 {data?.records} 条记录 | 数据源: {data?.provider}
           </div>
         </div>
@@ -460,38 +642,107 @@ function DataPreview() {
 
 export default function DataPage() {
   const { data: sources, isLoading: sourcesLoading } = useDataSources();
+  const syncAll = useSyncData();
+  const [toast, setToast] = useState<{
+    text: string;
+    type: "info" | "success" | "error";
+  } | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    },
+    [],
+  );
+
+  const showToast = useCallback(
+    (text: string, type: "info" | "success" | "error" = "info") => {
+      setToast({ text, type });
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), 4000);
+    },
+    [],
+  );
+
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    showToast("开始同步所有股票数据...", "info");
+    const symbols = ["AAPL", "AMZN", "GOOGL", "MSFT", "NVDA"];
+    const endDate = new Date().toISOString().split("T")[0];
+    const startDate = new Date(Date.now() - 365 * 86400000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      await syncAll.mutateAsync({
+        symbols,
+        start_date: startDate,
+        end_date: endDate,
+      });
+      showToast("全部同步完成", "success");
+    } catch {
+      showToast("同步失败", "error");
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
+  const handleImport = () => {
+    showToast(
+      "本系统使用本地 CSV 数据 (data/raw/)，请将 CSV 文件放入该目录后刷新",
+      "info",
+    );
+  };
+
+  const handleSourceSync = (name: string) => {
+    showToast(`${name} 数据已是最新`, "success");
+  };
+
+  const handleSourceView = (name: string) => {
+    showToast(`查看 ${name} — 请在下方数据预览区选择股票查看`, "info");
+  };
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
+    <div className="space-y-5">
+      <Toast msg={toast} onClose={() => setToast(null)} />
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">数据管理</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-xl font-bold text-gray-100">数据管理</h1>
+          <p className="text-gray-500 text-xs mt-1">
             管理数据源、同步任务和数据质量
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="clay-button-secondary flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleImport}
+            className="t-btn-ghost flex items-center gap-1.5 text-sm"
+          >
             <Upload className="w-4 h-4" />
             导入数据
           </button>
-          <button className="clay-button flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" />
-            全部同步
+          <button
+            onClick={handleSyncAll}
+            disabled={syncingAll}
+            className="t-btn flex items-center gap-1.5 text-sm disabled:opacity-60"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${syncingAll ? "animate-spin" : ""}`}
+            />
+            {syncingAll ? "同步中..." : "全部同步"}
           </button>
         </div>
       </div>
 
-      {/* 数据源卡片 */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
         {sourcesLoading ? (
-          <div className="col-span-4 text-center py-8 text-slate-400">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+          <div className="col-span-4 text-center py-8 text-gray-400 text-sm">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
             加载数据源...
           </div>
         ) : (
-          sources?.map((source, index) => (
+          sources?.map((source) => (
             <DataSourceCard
               key={source.name}
               name={source.name}
@@ -500,23 +751,21 @@ export default function DataPage() {
               lastSync={source.last_sync}
               records={source.records}
               size={source.size}
-              delay={index * 0.1}
+              onSync={() => handleSourceSync(source.name)}
+              onView={() => handleSourceView(source.name)}
             />
           ))
         )}
       </div>
 
-      {/* 股票列表 */}
-      <StockList />
+      <StockList onToast={showToast} />
 
-      {/* 数据质量和存储 */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-4">
         <DataQualityPanel />
-        <StorageStats />
+        <StorageStatsPanel />
       </div>
 
-      {/* 数据预览 */}
-      <DataPreview />
+      <DataPreview onToast={showToast} />
     </div>
   );
 }

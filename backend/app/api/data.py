@@ -9,6 +9,7 @@ from typing import List, Optional
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import os
 
 from app.core.database import get_session
 
@@ -195,44 +196,69 @@ async def get_stock_data(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     interval: str = "1d",
-    provider: str = "yfinance"
+    provider: str = "yfinance",
+    limit: int = Query(500, ge=10, le=2000),
 ):
-    """获取单只股票历史数据 (OpenBB)"""
-    try:
-        fetcher = get_fetcher(provider)
-        df = fetcher.fetch_historical(
-            symbol,
-            start_date or "2024-01-01",
-            end_date or datetime.now().strftime("%Y-%m-%d"),
-            interval=interval
-        )
+    """获取单只股票历史数据 — 优先本地 CSV，回退到 OpenBB"""
+    df = None
+    source = "local"
 
-        if df.empty:
-            raise HTTPException(status_code=404, detail=f"未找到 {symbol} 的数据")
+    # 方案1: 优先读取本地 CSV（与训练数据一致）
+    data_dir = os.getenv("DATA_DIR", "../data")
+    for prefix in ["us_", ""]:
+        csv_path = os.path.join(data_dir, "raw", f"{prefix}{symbol}.csv")
+        if os.path.isfile(csv_path):
+            df = pd.read_csv(csv_path)
+            source = "local_csv"
+            break
 
-        # Replace NaN values with None for JSON serialization
-        df = df.fillna(0)  # or use df.where(pd.notnull(df), None) for None values
-        data = df.reset_index().to_dict(orient="records")
+    # 方案2: 本地没有时使用 OpenBB
+    if (df is None or (isinstance(df, pd.DataFrame) and df.empty)) and OpenBBFetcher is not None:
+        try:
+            fetcher = get_fetcher(provider)
+            df = fetcher.fetch_historical(
+                symbol,
+                start_date or "2024-01-01",
+                end_date or datetime.now().strftime("%Y-%m-%d"),
+                interval=interval
+            )
+            source = provider
+        except Exception:
+            df = None
 
-        # 处理日期序列化
-        for record in data:
-            for key, value in record.items():
-                if isinstance(value, (pd.Timestamp, datetime)):
-                    record[key] = value.isoformat()
-                # Handle any remaining float NaN/Inf
-                elif isinstance(value, float) and (pd.isna(value) or np.isinf(value)):
-                    record[key] = 0
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        raise HTTPException(status_code=404, detail=f"未找到 {symbol} 的数据")
 
-        return {
-            "symbol": symbol,
-            "provider": provider,
-            "interval": interval,
-            "records": len(data),
-            "data": data[-100:]
-        }
+    # 统一列名
+    col_map = {'Date': 'date', 'Open': 'open', 'High': 'high',
+               'Low': 'low', 'Close': 'close', 'Volume': 'volume'}
+    df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # 统一日期格式为 YYYY-MM-DD
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], utc=True, errors='coerce').dt.strftime('%Y-%m-%d')
+        if start_date:
+            df = df[df['date'] >= start_date[:10]]
+        if end_date:
+            df = df[df['date'] <= end_date[:10]]
+
+    df = df.fillna(0)
+    data = df.tail(limit).to_dict(orient="records")
+
+    for record in data:
+        for key, value in record.items():
+            if isinstance(value, (pd.Timestamp, datetime)):
+                record[key] = str(value)[:10]
+            elif isinstance(value, float) and (pd.isna(value) or np.isinf(value)):
+                record[key] = 0
+
+    return {
+        "symbol": symbol,
+        "provider": source,
+        "interval": interval,
+        "records": len(data),
+        "data": data
+    }
 
 
 @router.get("/stocks/{symbol}/quote")

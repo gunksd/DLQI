@@ -45,10 +45,16 @@ class LSTMModel(nn.Module):
         return self.fc(attn_out[:, -1, :])
 
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, d_model=128, nhead=8, num_layers=4, dropout=0.1):
+    def __init__(self, input_size, d_model=64, nhead=4, num_layers=2, dropout=0.2):
         super().__init__()
+        self.d_model = d_model
         self.input_proj = nn.Linear(input_size, d_model)
-        self.pos_enc = nn.Parameter(torch.randn(1, 500, d_model))
+        pe = torch.zeros(500, d_model)
+        position = torch.arange(0, 500, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))
         layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
                                            dim_feedforward=d_model*4, dropout=dropout, batch_first=True)
         self.transformer = nn.TransformerEncoder(layer, num_layers)
@@ -56,9 +62,11 @@ class TransformerModel(nn.Module):
                                 nn.ReLU(), nn.Dropout(dropout), nn.Linear(d_model//2, 1))
 
     def forward(self, x):
+        seq_len = x.size(1)
         x = self.input_proj(x)
-        x = x + self.pos_enc[:, :x.size(1), :]
-        x = self.transformer(x)
+        x = x + self.pe[:, :seq_len, :]
+        mask = nn.Transformer.generate_square_subsequent_mask(seq_len, device=x.device)
+        x = self.transformer(x, mask=mask)
         return self.fc(x[:, -1, :])
 
 
@@ -235,11 +243,17 @@ def calculate_metrics(portfolio, benchmark, daily_returns, trades, initial_capit
 
 
 # ── 单模型回测流程 ──
+MULTI_TEST_SYMBOLS = ["AAPL", "AMZN", "GOOGL", "MSFT", "NVDA"]
+
 def backtest_single_model(model_dir: Path, seq_length=60, test_ratio=0.2):
     model, scaler, meta = load_model(model_dir)
     model_id = meta["model_id"]
     model_type = meta["model_type"]
     symbol = meta["symbol"]
+
+    # MULTI 模型：对每只原始股票分别回测，返回列表
+    if symbol == "MULTI":
+        return backtest_multi_model(model, scaler, meta, seq_length, test_ratio)
 
     # 加载数据
     csv_path = RAW_DIR / f"us_{symbol}.csv"
@@ -310,6 +324,77 @@ def backtest_single_model(model_dir: Path, seq_length=60, test_ratio=0.2):
     (CURVES_DIR / f"{model_id}.json").write_text(json.dumps(curve_data, ensure_ascii=False))
 
     return metrics
+
+
+def backtest_multi_model(model, scaler, meta, seq_length=60, test_ratio=0.2):
+    """MULTI 模型：对每只测试股票分别回测，返回结果列表"""
+    model_id = meta["model_id"]
+    model_type = meta["model_type"]
+    results = []
+
+    for symbol in MULTI_TEST_SYMBOLS:
+        csv_path = RAW_DIR / f"us_{symbol}.csv"
+        if not csv_path.exists():
+            continue
+
+        df = pd.read_csv(csv_path)
+        df = engineer_features(df)
+
+        X_raw = df[FEATURE_COLS].values
+        X_scaled = scaler.transform(X_raw)
+
+        X_seq, targets, dates_seq, prices_seq, returns_seq = [], [], [], [], []
+        for i in range(seq_length, len(X_scaled)):
+            X_seq.append(X_scaled[i - seq_length:i])
+            targets.append(df['returns'].iloc[i])
+            dates_seq.append(df['date'].iloc[i] if 'date' in df.columns else str(i))
+            prices_seq.append(df['close'].iloc[i])
+            returns_seq.append(df['returns'].iloc[i])
+
+        X_seq = np.array(X_seq)
+        returns_seq = np.array(returns_seq)
+        prices_seq = np.array(prices_seq)
+
+        n_test = int(len(X_seq) * test_ratio)
+        X_test = X_seq[-n_test:]
+        returns_test = returns_seq[-n_test:]
+        prices_test = prices_seq[-n_test:]
+        dates_test = dates_seq[-n_test:]
+
+        preds = predict(model, model_type, X_test)
+
+        actual_dir = (returns_test > 0).astype(int)
+        pred_dir = (preds > 0).astype(int)
+        direction_accuracy = np.mean(actual_dir == pred_dir)
+
+        portfolio, benchmark, daily_rets, trades = run_backtest(
+            preds, returns_test, prices_test, dates_test
+        )
+
+        metrics = calculate_metrics(portfolio, benchmark, daily_rets, trades)
+        metrics["direction_accuracy"] = direction_accuracy
+        metrics["model_id"] = f"{model_id}_{symbol}"
+        metrics["model_type"] = model_type
+        metrics["symbol"] = symbol
+
+        # 保存资金曲线
+        peak = np.maximum.accumulate(portfolio)
+        drawdown = ((portfolio - peak) / peak).tolist()
+        curve_data = {
+            "model_id": f"{model_id}_{symbol}",
+            "symbol": symbol,
+            "model_type": model_type,
+            "dates": [str(d) for d in dates_test],
+            "portfolio_values": portfolio.tolist(),
+            "benchmark_values": benchmark.tolist(),
+            "daily_returns": daily_rets.tolist(),
+            "drawdown": drawdown,
+            "trades": trades,
+        }
+        (CURVES_DIR / f"{model_id}_{symbol}.json").write_text(json.dumps(curve_data, ensure_ascii=False))
+        results.append(metrics)
+
+    return results
 
 
 # ── 最佳模型分析 ──
@@ -409,15 +494,25 @@ def run_all():
         model_id = md.name
         print(f"[{i:2d}/{len(model_dirs)}] {model_id} ... ", end="", flush=True)
         try:
-            metrics = backtest_single_model(md)
-            if metrics:
+            result = backtest_single_model(md)
+            if result is None:
+                print("SKIP (no data)")
+            elif isinstance(result, list):
+                # MULTI 模型返回多个结果
+                for metrics in result:
+                    results.append(metrics)
+                    sr = metrics["sharpe_ratio"]
+                    nt = metrics["n_trades"]
+                    da = metrics["direction_accuracy"]
+                    print(f"\n      {metrics['symbol']}: Sharpe={sr:.3f}  Trades={nt}  DirAcc={da:.1%}", end="")
+                print()
+            else:
+                metrics = result
                 results.append(metrics)
                 sr = metrics["sharpe_ratio"]
                 nt = metrics["n_trades"]
                 da = metrics["direction_accuracy"]
                 print(f"Sharpe={sr:.3f}  Trades={nt}  DirAcc={da:.1%}")
-            else:
-                print("SKIP (no data)")
         except Exception as e:
             print(f"ERROR: {e}")
 

@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+from app.services.job_service import job_service
+
 router = APIRouter()
 
 # 延迟导入避免循环依赖
@@ -26,6 +28,20 @@ class ModelConfig(BaseModel):
     name: str
     model_type: str
     params: Optional[Dict[str, Any]] = None
+
+
+class TrainRequest(BaseModel):
+    symbol: str
+    model_type: str = "lightgbm"   # lightgbm, xgboost, lstm, transformer
+    sequence_length: int = 60
+    epochs: int = 50
+
+
+class MultiTrainRequest(BaseModel):
+    model_type: str = "transformer"
+    sequence_length: int = 60
+    epochs: int = 30
+    max_stocks: Optional[int] = None
 
 
 # ==================== API 端点 ====================
@@ -140,6 +156,7 @@ async def get_feature_importance(model_id: str):
 async def get_predictions(
     model_id: str,
     days: int = Query(60, ge=10, le=500),
+    symbol: Optional[str] = Query(None, description="股票代码（MULTI模型必填）"),
 ):
     """用真实模型生成预测"""
     mgr = _get_manager()
@@ -147,12 +164,14 @@ async def get_predictions(
     if not info:
         raise HTTPException(status_code=404, detail=f"模型 {model_id} 未找到")
 
-    symbol = info['symbol']
+    target_symbol = symbol or info['symbol']
+    if target_symbol == "MULTI":
+        raise HTTPException(status_code=400, detail="MULTI模型需要指定 symbol 参数，如 ?symbol=AAPL")
 
     # 获取数据
     try:
         import yfinance as yf
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(target_symbol)
         df = ticker.history(period="2y", auto_adjust=True).reset_index()
         df = df.rename(columns={
             'Date': 'date', 'Open': 'open', 'High': 'high',
@@ -195,10 +214,54 @@ async def get_predictions(
 
     return {
         "model_id": model_id,
-        "symbol": symbol,
+        "symbol": target_symbol,
         "predictions": predictions_list,
         "direction_accuracy": round(correct / total, 4) if total > 0 else 0,
         "total": len(predictions_list),
+    }
+
+
+# ==================== 训练 API ====================
+
+@router.post("/train")
+async def train_model(req: TrainRequest):
+    """触发模型训练"""
+    from app.services.training_service import run_training
+
+    job_id = await job_service.submit(
+        job_type="train",
+        func=run_training,
+        params={
+            "symbol": req.symbol,
+            "model_type": req.model_type,
+            "sequence_length": req.sequence_length,
+            "epochs": req.epochs,
+        },
+    )
+    return {
+        "message": f"训练任务已提交: {req.model_type} on {req.symbol}",
+        "job_id": job_id,
+    }
+
+
+@router.post("/train-multi")
+async def train_multi_stock(req: MultiTrainRequest):
+    """触发多股票联合训练"""
+    from app.services.training_service import run_multi_stock_training
+
+    job_id = await job_service.submit(
+        job_type="train_multi",
+        func=run_multi_stock_training,
+        params={
+            "model_type": req.model_type,
+            "sequence_length": req.sequence_length,
+            "epochs": req.epochs,
+            "max_stocks": req.max_stocks,
+        },
+    )
+    return {
+        "message": f"多股票联合训练已提交: {req.model_type}",
+        "job_id": job_id,
     }
 
 

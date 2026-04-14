@@ -51,10 +51,17 @@ if HAS_TORCH:
             return self.fc(attn_out[:, -1, :])
 
     class TransformerModel(nn.Module):
-        def __init__(self, input_size, d_model=128, nhead=8, num_layers=4, dropout=0.1):
+        def __init__(self, input_size, d_model=64, nhead=4, num_layers=2, dropout=0.2):
             super().__init__()
+            self.d_model = d_model
             self.input_proj = nn.Linear(input_size, d_model)
-            self.pos_enc = nn.Parameter(torch.randn(1, 500, d_model))
+            # 正弦位置编码（不需要学习，小数据更稳定）
+            pe = torch.zeros(500, d_model)
+            position = torch.arange(0, 500, dtype=torch.float).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            self.register_buffer('pe', pe.unsqueeze(0))  # (1, 500, d_model)
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=d_model, nhead=nhead, dim_feedforward=d_model * 4,
                 dropout=dropout, batch_first=True
@@ -67,9 +74,12 @@ if HAS_TORCH:
             )
 
         def forward(self, x):
+            seq_len = x.size(1)
             x = self.input_proj(x)
-            x = x + self.pos_enc[:, :x.size(1), :]
-            x = self.transformer(x)
+            x = x + self.pe[:, :seq_len, :]
+            # 因果掩码：防止未来信息泄露
+            mask = nn.Transformer.generate_square_subsequent_mask(seq_len, device=x.device)
+            x = self.transformer(x, mask=mask)
             return self.fc(x[:, -1, :])
 
 

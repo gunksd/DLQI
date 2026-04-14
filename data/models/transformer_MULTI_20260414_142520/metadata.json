@@ -1,0 +1,25 @@
+{
+  "model_id": "transformer_MULTI_20260414_142520",
+  "model_type": "transformer",
+  "symbol": "MULTI",
+  "created_at": "20260414_142520",
+  "val_loss": 0.00033165497416338935,
+  "direction_accuracy": 0.5308471631341587,
+  "n_stocks": 503,
+  "data_points": 997763,
+  "epochs": 30,
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "returns",
+    "ma_5",
+    "ma_20",
+    "volatility",
+    "rsi",
+    "macd",
+    "macd_signal"
+  ]
+}

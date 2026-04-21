@@ -70,6 +70,34 @@ class TransformerModel(nn.Module):
         return self.fc(x[:, -1, :])
 
 
+class TransformerClassifier(nn.Module):
+    """分类版 Transformer：预测涨(1)/跌(0)"""
+    def __init__(self, input_size, d_model=64, nhead=4, num_layers=2, dropout=0.3):
+        super().__init__()
+        self.input_proj = nn.Linear(input_size, d_model)
+        pe = torch.zeros(500, d_model)
+        position = torch.arange(0, 500, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=nhead, dim_feedforward=d_model * 4,
+            dropout=dropout, batch_first=True)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
+        self.fc = nn.Sequential(
+            nn.Linear(d_model, d_model // 2), nn.GELU(), nn.Dropout(dropout),
+            nn.Linear(d_model // 2, 2))
+
+    def forward(self, x):
+        seq_len = x.size(1)
+        x = self.input_proj(x)
+        x = x + self.pe[:, :seq_len, :]
+        mask = nn.Transformer.generate_square_subsequent_mask(seq_len, device=x.device)
+        x = self.transformer(x, mask=mask)
+        return self.fc(x[:, -1, :])
+
+
 # ── 特征工程 (与 model_service.py 一致的 12 特征) ──
 FEATURE_COLS = ['open','high','low','close','volume','returns','ma_5','ma_20',
                 'volatility','rsi','macd','macd_signal']
@@ -104,7 +132,11 @@ def load_model(model_dir: Path):
         state = torch.load(model_dir / "model.pt", map_location=DEVICE, weights_only=True)
         model.load_state_dict(state); model.to(DEVICE); model.eval()
     elif model_type == "transformer":
-        model = TransformerModel(input_size=input_size)
+        task_type = meta.get("task_type", "regression")
+        if task_type == "classification":
+            model = TransformerClassifier(input_size=input_size)
+        else:
+            model = TransformerModel(input_size=input_size)
         state = torch.load(model_dir / "model.pt", map_location=DEVICE, weights_only=True)
         model.load_state_dict(state); model.to(DEVICE); model.eval()
     elif model_type == "lightgbm":
@@ -120,15 +152,20 @@ def load_model(model_dir: Path):
 
 
 # ── 预测 ──
-def predict(model, model_type: str, X_seq: np.ndarray) -> np.ndarray:
+def predict(model, model_type: str, X_seq: np.ndarray, meta: dict = None) -> np.ndarray:
     if model_type in ("lstm", "transformer"):
+        task_type = (meta or {}).get("task_type", "regression")
         with torch.no_grad():
             t = torch.FloatTensor(X_seq).to(DEVICE)
-            # 分批避免 OOM
             preds = []
             bs = 256
             for i in range(0, len(t), bs):
-                preds.append(model(t[i:i+bs]).squeeze(-1).cpu().numpy())
+                out = model(t[i:i+bs])
+                if task_type == "classification":
+                    # 分类模型：logits[1] - logits[0] 作为信号（正=看涨）
+                    preds.append((out[:, 1] - out[:, 0]).cpu().numpy())
+                else:
+                    preds.append(out.squeeze(-1).cpu().numpy())
             return np.concatenate(preds)
     elif model_type == "lightgbm":
         return model.predict(X_seq.reshape(X_seq.shape[0], -1))
@@ -140,7 +177,15 @@ def predict(model, model_type: str, X_seq: np.ndarray) -> np.ndarray:
 
 # ── 回测引擎 ──
 def run_backtest(predictions, actual_returns, prices, dates,
-                 initial_capital=1_000_000, commission=0.0003, slippage=0.001):
+                 initial_capital=1_000_000, commission=0.0005, slippage=0.001,
+                 max_hold_days=20, stop_loss=-0.05, take_profit=0.10):
+    """
+    回测引擎：
+    - 信号：预测值 > 0 买入，< 0 卖出（使用原始预测方向）
+    - 最大持仓 5 天强制平仓（避免假装 buy-and-hold）
+    - 止损 -3% / 止盈 +6%
+    - 手续费 0.1% + 滑点 0.2%（更接近真实交易成本）
+    """
     n = len(predictions)
     capital = initial_capital
     position = 0  # 0=空仓, 1=持仓
@@ -150,36 +195,49 @@ def run_backtest(predictions, actual_returns, prices, dates,
     daily_returns_list = [0.0]
     bench_capital = initial_capital
 
+    hold_days = 0
+    entry_capital = capital
+
     for i in range(n):
         ret = actual_returns[i] if not np.isnan(actual_returns[i]) else 0.0
-        # benchmark: buy and hold
         bench_capital *= (1 + ret)
         benchmark.append(bench_capital)
 
-        signal = 1 if predictions[i] > 0 else 0
+        # 持仓中检查止损止盈和最大持仓
+        should_close = False
+        if position == 1:
+            hold_days += 1
+            pnl_pct = (capital - entry_capital) / entry_capital
+            if pnl_pct <= stop_loss:
+                should_close = True
+            elif pnl_pct >= take_profit:
+                should_close = True
+            elif hold_days >= max_hold_days:
+                should_close = True
 
-        if signal == 1 and position == 0:
-            # 买入
+        # 交易逻辑
+        if position == 0 and predictions[i] > 0:
             cost = capital * (commission + slippage)
             capital -= cost
             position = 1
+            hold_days = 0
+            entry_capital = capital
             trades.append({"date": str(dates[i]), "action": "buy", "price": round(prices[i], 2), "cost": round(cost, 2)})
 
-        elif signal == 0 and position == 1:
-            # 卖出
+        elif position == 1 and (predictions[i] <= 0 or should_close):
             cost = capital * (commission + slippage)
             capital -= cost
             position = 0
+            hold_days = 0
             trades.append({"date": str(dates[i]), "action": "sell", "price": round(prices[i], 2), "cost": round(cost, 2)})
 
         if position == 1:
-            daily_ret = ret
-            capital *= (1 + daily_ret)
+            capital *= (1 + ret)
+            daily_returns_list.append(ret)
         else:
-            daily_ret = 0.0
+            daily_returns_list.append(0.0)
 
         portfolio.append(capital)
-        daily_returns_list.append(daily_ret)
 
     return np.array(portfolio), np.array(benchmark), np.array(daily_returns_list), trades
 
@@ -287,7 +345,7 @@ def backtest_single_model(model_dir: Path, seq_length=60, test_ratio=0.2):
     dates_test = dates_seq[-n_test:]
 
     # 预测
-    preds = predict(model, model_type, X_test)
+    preds = predict(model, model_type, X_test, meta)
 
     # 方向准确率
     actual_dir = (returns_test > 0).astype(int)
@@ -361,7 +419,7 @@ def backtest_multi_model(model, scaler, meta, seq_length=60, test_ratio=0.2):
         prices_test = prices_seq[-n_test:]
         dates_test = dates_seq[-n_test:]
 
-        preds = predict(model, model_type, X_test)
+        preds = predict(model, model_type, X_test, meta)
 
         actual_dir = (returns_test > 0).astype(int)
         pred_dir = (preds > 0).astype(int)

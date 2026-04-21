@@ -1,0 +1,68 @@
+[
+  {
+    "id": 1,
+    "level": "danger",
+    "title": "MSFT 回撤过大",
+    "message": "MSFT 最大回撤 -27.4%，超过 -25% 阈值",
+    "metric": "drawdown",
+    "current_value": -0.27447875306464314,
+    "threshold": -0.25,
+    "is_read": false,
+    "created_at": "2026-04-15T12:30:16.231790"
+  },
+  {
+    "id": 2,
+    "level": "warning",
+    "title": "MSFT Sharpe 为负",
+    "message": "MSFT Sharpe Ratio -0.93，策略表现不佳",
+    "metric": "sharpe",
+    "current_value": -0.9256693374426864,
+    "threshold": -0.5,
+    "is_read": false,
+    "created_at": "2026-04-15T12:30:16.231817"
+  },
+  {
+    "id": 3,
+    "level": "danger",
+    "title": "MSFT 回撤过大",
+    "message": "MSFT 最大回撤 -33.9%，超过 -25% 阈值",
+    "metric": "drawdown",
+    "current_value": -0.33910089393448806,
+    "threshold": -0.25,
+    "is_read": false,
+    "created_at": "2026-04-15T12:30:16.231835"
+  },
+  {
+    "id": 4,
+    "level": "warning",
+    "title": "AAPL Sharpe 为负",
+    "message": "AAPL Sharpe Ratio -0.69，策略表现不佳",
+    "metric": "sharpe",
+    "current_value": -0.694296511868984,
+    "threshold": -0.5,
+    "is_read": false,
+    "created_at": "2026-04-15T12:30:16.231843"
+  },
+  {
+    "id": 5,
+    "level": "danger",
+    "title": "MSFT 回撤过大",
+    "message": "MSFT 最大回撤 -30.8%，超过 -25% 阈值",
+    "metric": "drawdown",
+    "current_value": -0.30773537364125014,
+    "threshold": -0.25,
+    "is_read": false,
+    "created_at": "2026-04-15T12:30:16.231852"
+  },
+  {
+    "id": 6,
+    "level": "warning",
+    "title": "MSFT Sharpe 为负",
+    "message": "MSFT Sharpe Ratio -1.44，策略表现不佳",
+    "metric": "sharpe",
+    "current_value": -1.4375264718528156,
+    "threshold": -0.5,
+    "is_read": false,
+    "created_at": "2026-04-15T12:30:16.231856"
+  }
+]

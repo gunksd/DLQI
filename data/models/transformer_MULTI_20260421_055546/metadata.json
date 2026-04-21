@@ -1,13 +1,13 @@
 {
-  "model_id": "transformer_MULTI_20260414_142520",
+  "model_id": "transformer_MULTI_20260421_055546",
   "model_type": "transformer",
   "symbol": "MULTI",
-  "created_at": "20260414_142520",
-  "val_loss": 0.00033165497416338935,
-  "direction_accuracy": 0.5308471631341587,
+  "created_at": "20260421_055546",
+  "val_loss": 0.6948354265572991,
+  "direction_accuracy": 0.5114821746823638,
   "n_stocks": 503,
-  "data_points": 997763,
-  "epochs": 30,
+  "data_points": 997781,
+  "epochs": 20,
   "features": [
     "open",
     "high",
@@ -21,5 +21,6 @@
     "rsi",
     "macd",
     "macd_signal"
-  ]
+  ],
+  "task_type": "classification"
 }

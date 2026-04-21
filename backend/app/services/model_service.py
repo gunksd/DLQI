@@ -342,12 +342,77 @@ class ModelManager:
             return result
 
         else:
-            # 深度学习模型没有原生特征重要性，返回均匀分布
-            n = len(features)
-            return [
-                {'name': name, 'importance': round(1.0 / n, 4), 'rank': i + 1}
-                for i, name in enumerate(features)
-            ]
+            # 深度学习模型：用置换重要性法（Permutation Importance）
+            # 需要用真实数据，随机数据会导致模型输出坍缩
+            if not HAS_TORCH:
+                n = len(features)
+                return [{'name': name, 'importance': round(1.0 / n, 4), 'rank': i + 1}
+                        for i, name in enumerate(features)]
+
+            model = self._load_model(model_id)
+            scaler = self._loaded_scalers[model_id]
+            n_features = len(features)
+
+            # 加载真实数据
+            import glob as glob_mod
+            raw_dir = os.path.join(os.path.dirname(self._models_dir), 'raw')
+            csv_files = sorted(glob_mod.glob(os.path.join(raw_dir, 'us_*.csv')))
+            csv_files = [f for f in csv_files if 'idx_' not in os.path.basename(f)][:5]
+
+            all_seqs = []
+            for csv_path in csv_files:
+                try:
+                    df = pd.read_csv(csv_path)
+                    col_map = {'Date': 'date', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'}
+                    df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+                    df['returns'] = df['close'].pct_change()
+                    df['ma_5'] = df['close'].rolling(5).mean()
+                    df['ma_20'] = df['close'].rolling(20).mean()
+                    df['volatility'] = df['returns'].rolling(20).std()
+                    delta = df['close'].diff()
+                    gain = delta.where(delta > 0, 0).rolling(14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                    df['rsi'] = 100 - (100 / (1 + gain / (loss + 1e-10)))
+                    ema12 = df['close'].ewm(span=12).mean()
+                    ema26 = df['close'].ewm(span=26).mean()
+                    df['macd'] = ema12 - ema26
+                    df['macd_signal'] = df['macd'].ewm(span=9).mean()
+                    df = df.dropna()
+                    X = scaler.transform(df[features].values)
+                    for i in range(60, min(len(X), 120)):
+                        all_seqs.append(X[i-60:i])
+                except Exception:
+                    continue
+
+            if not all_seqs:
+                n = len(features)
+                return [{'name': name, 'importance': round(1.0 / n, 4), 'rank': i + 1}
+                        for i, name in enumerate(features)]
+
+            base_input = torch.FloatTensor(np.array(all_seqs)).to(self._device)
+
+            model.eval()
+            with torch.no_grad():
+                base_output = model(base_input).squeeze()
+                importances = np.zeros(n_features)
+                for feat_idx in range(n_features):
+                    permuted = base_input.clone()
+                    perm_idx = torch.randperm(len(base_input))
+                    permuted[:, :, feat_idx] = permuted[perm_idx, :, feat_idx]
+                    perm_output = model(permuted).squeeze()
+                    importances[feat_idx] = (base_output - perm_output).abs().mean().item()
+
+            total = importances.sum()
+            if total > 0:
+                importances = importances / total
+
+            result = []
+            for i, name in enumerate(features):
+                result.append({'name': name, 'importance': round(float(importances[i]), 4), 'rank': 0})
+            result.sort(key=lambda x: x['importance'], reverse=True)
+            for rank, item in enumerate(result, 1):
+                item['rank'] = rank
+            return result
 
     # ---------- 内部格式化 ----------
 

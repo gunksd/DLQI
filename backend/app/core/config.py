@@ -14,20 +14,15 @@ class Settings(BaseSettings):
     APP_NAME: str = "DLQI"
     DEBUG: bool = True
 
-    # 数据库配置
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/dlqi"
-    )
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
-    # 数据源配置
-    TUSHARE_TOKEN: str = os.getenv("TUSHARE_TOKEN", "")
+    # Supabase PostgreSQL 数据库
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     # CORS配置
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ]
 
     # 模型配置

@@ -9,19 +9,23 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from app.api import data, models, strategies, backtest, risk
+from app.api import jobs as jobs_api
+from app.api import paper_trading
 from app.core.config import settings
 from app.core.database import init_db
+from app.services.job_service import job_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时初始化
     print("🚀 DLQI 量化交易系统启动中...")
     await init_db()
-    print("✅ 数据库连接成功")
+    print("✅ SQLite 数据库就绪")
+    job_service.start()
+    print("✅ 任务队列就绪")
     yield
-    # 关闭时清理
+    job_service.shutdown()
     print("👋 系统关闭")
 
 
@@ -49,6 +53,8 @@ app.include_router(models.router, prefix="/api/models", tags=["模型管理"])
 app.include_router(strategies.router, prefix="/api/strategies", tags=["策略管理"])
 app.include_router(backtest.router, prefix="/api/backtest", tags=["回测系统"])
 app.include_router(risk.router, prefix="/api/risk", tags=["风险控制"])
+app.include_router(jobs_api.router, prefix="/api/jobs", tags=["任务管理"])
+app.include_router(paper_trading.router, prefix="/api/paper-trading", tags=["模拟交易"])
 
 
 @app.get("/")

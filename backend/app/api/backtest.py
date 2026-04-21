@@ -10,68 +10,45 @@ import os
 import csv
 import json
 import subprocess
-import threading
+
+from app.services.job_service import job_service
 
 router = APIRouter()
 
-# ==================== Pipeline 运行状态 ====================
-
-_pipeline_status: Dict[str, Any] = {
-    "running": False,
-    "last_run": None,
-    "progress": "",
-    "error": None,
-}
-_pipeline_lock = threading.Lock()
+# Compute absolute project root from this file's location
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+_RESULTS_DIR = os.path.join(_PROJECT_ROOT, "results")
+_DATA_DIR = os.path.join(_PROJECT_ROOT, "data")
 
 
-def _run_pipeline_background():
-    """在后台线程中运行 pipeline"""
-    global _pipeline_status
-    try:
-        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-        venv_python = os.path.join(root_dir, "backend", "venv", "bin", "python")
-        script = os.path.join(root_dir, "scripts", "run_pipeline.py")
+# ==================== Pipeline 执行函数 ====================
 
-        if not os.path.isfile(venv_python):
-            venv_python = "python3"
-        if not os.path.isfile(script):
-            with _pipeline_lock:
-                _pipeline_status["running"] = False
-                _pipeline_status["error"] = f"Pipeline 脚本不存在: {script}"
-            return
+def _run_pipeline_task(params: dict, progress_cb):
+    """Pipeline 任务函数（在线程池中执行）"""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    venv_python = os.path.join(root_dir, "backend", "venv", "bin", "python")
+    script = os.path.join(root_dir, "scripts", "run_pipeline.py")
 
-        with _pipeline_lock:
-            _pipeline_status["progress"] = "正在运行 pipeline..."
+    if not os.path.isfile(venv_python):
+        venv_python = "python3"
+    if not os.path.isfile(script):
+        raise FileNotFoundError(f"Pipeline 脚本不存在: {script}")
 
-        result = subprocess.run(
-            [venv_python, script],
-            cwd=root_dir,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+    progress_cb(10, "正在运行 pipeline...")
 
-        with _pipeline_lock:
-            _pipeline_status["running"] = False
-            _pipeline_status["last_run"] = datetime.now().isoformat()
-            if result.returncode == 0:
-                _pipeline_status["progress"] = "完成"
-                _pipeline_status["error"] = None
-            else:
-                _pipeline_status["error"] = result.stderr[-500:] if result.stderr else "未知错误"
-                _pipeline_status["progress"] = "失败"
+    result = subprocess.run(
+        [venv_python, script],
+        cwd=root_dir,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
 
-    except subprocess.TimeoutExpired:
-        with _pipeline_lock:
-            _pipeline_status["running"] = False
-            _pipeline_status["error"] = "Pipeline 运行超时 (>10分钟)"
-            _pipeline_status["progress"] = "超时"
-    except Exception as e:
-        with _pipeline_lock:
-            _pipeline_status["running"] = False
-            _pipeline_status["error"] = str(e)
-            _pipeline_status["progress"] = "异常"
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr[-500:] if result.stderr else "未知错误")
+
+    progress_cb(100, "Pipeline 完成")
+    return {"message": "Pipeline 运行成功"}
 
 
 # ==================== 请求模型 ====================
@@ -88,17 +65,8 @@ class BacktestRequest(BaseModel):
 
 def _find_results_csv() -> Optional[str]:
     """找到 backtest_results.csv"""
-    candidates = [
-        "../results/backtest_results.csv",
-        "./results/backtest_results.csv",
-        "/app/results/backtest_results.csv",
-        "/data/results/backtest_results.csv",
-        os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "backtest_results.csv"),
-    ]
-    for p in candidates:
-        if os.path.isfile(p):
-            return p
-    return None
+    p = os.path.join(_RESULTS_DIR, "backtest_results.csv")
+    return p if os.path.isfile(p) else None
 
 
 def _load_all_results() -> List[dict]:
@@ -156,24 +124,29 @@ def _format_result(row: dict, idx: int) -> dict:
 @router.post("/run")
 async def run_pipeline():
     """触发 pipeline 运行（训练 → 预测 → 回测 → 分析）"""
-    global _pipeline_status
-    with _pipeline_lock:
-        if _pipeline_status["running"]:
-            raise HTTPException(status_code=409, detail="Pipeline 正在运行中，请等待完成")
-        _pipeline_status["running"] = True
-        _pipeline_status["error"] = None
-        _pipeline_status["progress"] = "启动中..."
-
-    t = threading.Thread(target=_run_pipeline_background, daemon=True)
-    t.start()
-    return {"message": "Pipeline 已启动", "status": "running"}
+    job_id = await job_service.submit(
+        job_type="pipeline",
+        func=_run_pipeline_task,
+        params={},
+    )
+    return {"message": "Pipeline 已启动", "job_id": job_id, "status": "running"}
 
 
 @router.get("/status")
 async def get_pipeline_status():
-    """获取 pipeline 运行状态"""
-    with _pipeline_lock:
-        return dict(_pipeline_status)
+    """获取 pipeline 运行状态（兼容前端轮询）"""
+    jobs = await job_service.list_jobs(limit=5)
+    pipeline_jobs = [j for j in jobs if j["job_type"] == "pipeline"]
+    if not pipeline_jobs:
+        return {"running": False, "progress": "", "error": None, "last_run": None}
+    latest = pipeline_jobs[0]
+    return {
+        "running": latest["status"] in ("pending", "running"),
+        "progress": latest["current_step"],
+        "error": None if latest["status"] != "failed" else "Pipeline 运行失败",
+        "last_run": latest["created_at"],
+        "job_id": latest["id"],
+    }
 
 
 @router.get("/")
@@ -236,6 +209,90 @@ async def get_backtest_summary():
     return {"summary": summary, "best_models": best_models}
 
 
+@router.get("/recommend")
+async def get_recommended_strategy(symbol: Optional[str] = None):
+    """
+    策略综合评分与推荐
+    - 指定 symbol 时：推荐该股票上表现最好的模型
+    - 不指定时：推荐全局最优
+    评分权重：Sharpe 40% + 年化收益 30% + 最大回撤 20% + 方向准确率 10%
+    """
+    all_results = _load_all_results()
+    if not all_results:
+        return {"top": [], "best": None, "scoring_weights": {}}
+
+    # 过滤掉无效行（n_trades=0 且 sharpe=0 的无意义结果）
+    valid = [r for r in all_results if int(float(r.get("n_trades", 0))) > 0]
+    if not valid:
+        valid = all_results
+
+    # 按股票筛选
+    if symbol:
+        valid = [r for r in valid if r.get("symbol", "") == symbol]
+        if not valid:
+            return {"top": [], "best": None, "symbol": symbol, "message": f"没有 {symbol} 的回测结果"}
+
+    def _score(row: dict) -> float:
+        sharpe = _safe_float(row.get("sharpe_ratio"), 0) or 0
+        annual = _safe_float(row.get("annual_return"), 0) or 0
+        drawdown = _safe_float(row.get("max_drawdown"), 0) or 0  # 负值
+        accuracy = _safe_float(row.get("direction_accuracy"), 0) or 0
+
+        # 归一化到 [0,1]：drawdown 越小（越接近0）越好
+        sharpe_norm = min(max(sharpe / 4.0, 0), 1)
+        annual_norm = min(max(annual / 1.0, 0), 1)
+        drawdown_norm = min(max(1 + drawdown, 0), 1)  # drawdown 是负数
+        accuracy_norm = min(max(accuracy, 0), 1)
+
+        # MULTI 模型稳定性加分：跨股票泛化能力
+        stability_bonus = 0.05 if "MULTI" in row.get("model_id", "") else 0
+
+        return round(
+            sharpe_norm * 0.35
+            + annual_norm * 0.25
+            + drawdown_norm * 0.20
+            + accuracy_norm * 0.10
+            + stability_bonus
+            + 0.10,  # 基础分
+            4,
+        )
+
+    scored = []
+    for i, row in enumerate(valid):
+        result = _format_result(row, i + 1)
+        score = _score(row)
+        sharpe = result.get("sharpe_ratio") or 0
+        annual = result.get("annual_return") or 0
+        drawdown = result.get("max_drawdown") or 0
+        accuracy = result.get("direction_accuracy") or 0
+        result["composite_score"] = score
+        result["score_breakdown"] = {
+            "sharpe_score": round(min(max(sharpe / 4.0, 0), 1) * 0.35, 4),
+            "return_score": round(min(max(annual / 1.0, 0), 1) * 0.25, 4),
+            "drawdown_score": round(min(max(1 + drawdown, 0), 1) * 0.20, 4),
+            "accuracy_score": round(min(max(accuracy, 0), 1) * 0.10, 4),
+            "stability_bonus": 0.05 if "MULTI" in (result.get("model_id") or "") else 0,
+        }
+        scored.append(result)
+
+    scored.sort(key=lambda x: x["composite_score"], reverse=True)
+    top3 = scored[:3]
+
+    return {
+        "top": top3,
+        "best": top3[0] if top3 else None,
+        "symbol": symbol,
+        "scoring_weights": {
+            "sharpe_ratio": 0.35,
+            "annual_return": 0.25,
+            "max_drawdown": 0.20,
+            "direction_accuracy": 0.10,
+            "stability_bonus": 0.05,
+        },
+        "total_evaluated": len(scored),
+    }
+
+
 @router.get("/compare")
 async def compare_by_symbol(symbol: str):
     """对比同一股票的不同模型回测结果"""
@@ -276,15 +333,10 @@ async def get_sharpe_heatmap():
 @router.get("/analysis")
 async def get_model_analysis():
     """返回最佳模型分析报告"""
-    candidates = [
-        "../results/model_analysis.json",
-        "./results/model_analysis.json",
-        os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "model_analysis.json"),
-    ]
-    for p in candidates:
-        if os.path.isfile(p):
-            with open(p) as f:
-                return json.load(f)
+    p = os.path.join(_RESULTS_DIR, "model_analysis.json")
+    if os.path.isfile(p):
+        with open(p) as f:
+            return json.load(f)
     raise HTTPException(status_code=404, detail="分析报告未生成，请先运行 pipeline")
 
 
@@ -293,8 +345,7 @@ async def get_correlation_matrix():
     """计算股票收益率相关性矩阵"""
     import pandas as pd
     import numpy as np
-    data_dir = os.getenv("DATA_DIR", "../data")
-    raw_dir = os.path.join(data_dir, "raw")
+    raw_dir = os.path.join(_DATA_DIR, "raw")
 
     symbols = []
     returns_dict = {}
@@ -328,15 +379,8 @@ async def get_correlation_matrix():
 
 
 def _find_equity_curve(model_id: str) -> Optional[str]:
-    candidates = [
-        f"../results/equity_curves/{model_id}.json",
-        f"./results/equity_curves/{model_id}.json",
-        os.path.join(os.getenv("DATA_DIR", "../data"), "..", "results", "equity_curves", f"{model_id}.json"),
-    ]
-    for p in candidates:
-        if os.path.isfile(p):
-            return p
-    return None
+    p = os.path.join(_RESULTS_DIR, "equity_curves", f"{model_id}.json")
+    return p if os.path.isfile(p) else None
 
 
 @router.get("/{model_id}/equity-curve")
@@ -346,7 +390,17 @@ async def get_equity_curve(model_id: str):
     if not path:
         raise HTTPException(status_code=404, detail=f"未找到 {model_id} 的资金曲线数据")
     with open(path) as f:
-        return json.load(f)
+        data = json.load(f)
+    # 对齐 dates 和 portfolio_values 长度，取较短的
+    dates = data.get("dates", [])
+    pv = data.get("portfolio_values", [])
+    bv = data.get("benchmark_values", [])
+    n = min(len(dates), len(pv))
+    data["dates"] = dates[:n]
+    data["portfolio_values"] = pv[:n]
+    if bv:
+        data["benchmark_values"] = bv[:n]
+    return data
 
 
 @router.get("/{model_id}")

@@ -1,5 +1,5 @@
 """
-数据库连接和初始化
+数据库连接和初始化 — Supabase PostgreSQL + asyncpg
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -11,17 +11,21 @@ from loguru import logger
 from app.core.config import settings
 
 
-# 创建异步引擎
+# Supabase PostgreSQL 连接（使用 asyncpg 驱动）
+_db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+
 try:
-    DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-    engine = create_async_engine(DATABASE_URL, echo=settings.DEBUG)
+    engine = create_async_engine(
+        _db_url, echo=False, pool_pre_ping=True,
+        connect_args={"prepared_statement_cache_size": 0, "statement_cache_size": 0},
+    )
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    HAS_DATABASE = True
+    DB_AVAILABLE = True
 except Exception as e:
-    logger.warning(f"数据库连接配置失败: {e}")
+    logger.warning(f"数据库连接配置失败: {e}，paper trading 功能不可用")
     engine = None
     async_session = None
-    HAS_DATABASE = False
+    DB_AVAILABLE = False
 
 
 class Base(DeclarativeBase):
@@ -29,7 +33,7 @@ class Base(DeclarativeBase):
     pass
 
 
-# ==================== 数据模型 ====================
+# ==================== 原有数据模型 ====================
 
 class StockData(Base):
     """股票数据表"""
@@ -54,7 +58,7 @@ class FeatureData(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String(20), index=True, nullable=False)
     date = Column(DateTime, index=True, nullable=False)
-    features = Column(JSON)  # 存储特征字典
+    features = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -64,12 +68,12 @@ class MLModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
-    model_type = Column(String(50), nullable=False)  # lstm, lightgbm, xgboost, ensemble
+    model_type = Column(String(50), nullable=False)
     version = Column(String(20))
     params = Column(JSON)
-    metrics = Column(JSON)  # accuracy, precision, recall, f1, auc
+    metrics = Column(JSON)
     model_path = Column(String(500))
-    status = Column(String(20), default="pending")  # pending, training, trained, failed
+    status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -81,10 +85,10 @@ class Strategy(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    strategy_type = Column(String(50))  # ml, technical, hybrid
-    model_id = Column(Integer)  # 关联的模型ID
+    strategy_type = Column(String(50))
+    model_id = Column(Integer)
     params = Column(JSON)
-    status = Column(String(20), default="inactive")  # inactive, active, backtesting
+    status = Column(String(20), default="inactive")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -106,9 +110,9 @@ class BacktestResult(Base):
     win_rate = Column(Float)
     profit_factor = Column(Float)
     total_trades = Column(Integer)
-    metrics = Column(JSON)  # 详细指标
-    equity_curve = Column(JSON)  # 权益曲线数据
-    trades = Column(JSON)  # 交易记录
+    metrics = Column(JSON)
+    equity_curve = Column(JSON)
+    trades = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -120,7 +124,7 @@ class Trade(Base):
     strategy_id = Column(Integer, index=True)
     backtest_id = Column(Integer, index=True)
     symbol = Column(String(20), nullable=False)
-    direction = Column(String(10))  # buy, sell
+    direction = Column(String(10))
     quantity = Column(Integer)
     price = Column(Float)
     commission = Column(Float)
@@ -154,32 +158,83 @@ class Alert(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     strategy_id = Column(Integer, index=True)
-    level = Column(String(20))  # info, warning, danger
+    level = Column(String(20))
     title = Column(String(200))
     message = Column(Text)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+# ==================== 新增表：任务、模拟交易 ====================
+
+class Job(Base):
+    """异步任务表"""
+    __tablename__ = "jobs"
+
+    id = Column(String(36), primary_key=True)
+    job_type = Column(String(50), nullable=False)      # train, backtest, sync
+    status = Column(String(20), default="pending")     # pending, running, completed, failed, cancelled
+    progress = Column(Float, default=0)                # 0-100
+    current_step = Column(String(200), default="")
+    params = Column(JSON)
+    result = Column(JSON)
+    error = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PaperPortfolio(Base):
+    """模拟交易组合"""
+    __tablename__ = "paper_portfolios"
+
+    id = Column(String(36), primary_key=True)
+    name = Column(String(100), nullable=False)
+    initial_capital = Column(Float, default=100000)
+    cash = Column(Float, default=100000)
+    positions = Column(JSON, default=dict)             # {symbol: {qty, avg_price}}
+    total_value = Column(Float, default=100000)
+    model_id = Column(String(200))
+    status = Column(String(20), default="active")      # active, closed
+    config = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PaperTrade(Base):
+    """模拟交易记录"""
+    __tablename__ = "paper_trades"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id = Column(String(36), index=True, nullable=False)
+    symbol = Column(String(20), nullable=False)
+    side = Column(String(10), nullable=False)          # buy, sell
+    quantity = Column(Float, nullable=False)
+    price = Column(Float, nullable=False)
+    commission = Column(Float, default=0)
+    signal_source = Column(String(100))
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+
 # ==================== 数据库初始化 ====================
 
 async def init_db():
-    """初始化数据库"""
-    if not HAS_DATABASE or engine is None:
-        logger.warning("数据库未配置，跳过初始化。部分功能可能不可用。")
+    """初始化数据库（自动建表）"""
+    global DB_AVAILABLE
+    if not DB_AVAILABLE:
+        logger.warning("数据库不可用，跳过初始化")
         return
-
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        logger.info("Supabase PostgreSQL 数据库就绪")
     except Exception as e:
-        logger.error(f"数据库初始化失败: {e}")
-        logger.warning("将继续运行，但数据库相关功能可能不可用")
+        logger.warning(f"数据库初始化失败: {e}，paper trading 功能不可用")
+        DB_AVAILABLE = False
 
 
 async def get_session() -> AsyncSession:
     """获取数据库会话"""
-    if not HAS_DATABASE or async_session is None:
-        raise RuntimeError("数据库未配置")
+    if not DB_AVAILABLE:
+        raise RuntimeError("数据库不可用")
     async with async_session() as session:
         yield session

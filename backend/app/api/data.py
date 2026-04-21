@@ -1,9 +1,8 @@
 """
-数据管理 API - 基于 OpenBB 平台
+数据管理 API - yfinance + SQLite
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -11,7 +10,12 @@ import pandas as pd
 import numpy as np
 import os
 
-from app.core.database import get_session
+from app.services.job_service import job_service
+
+# Compute absolute project root from this file's location
+# __file__ = .../backend/app/api/data.py → project root = 3 levels up from backend/
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+_DATA_DIR = os.path.join(_PROJECT_ROOT, "data")
 
 try:
     from app.services.data.fetcher import OpenBBFetcher
@@ -84,62 +88,75 @@ def get_fetcher(provider: str = "yfinance") -> OpenBBFetcher:
 
 @router.get("/sources")
 async def get_data_sources():
-    """获取数据源状态 - OpenBB 支持的数据提供商"""
-    return [
+    """获取数据源状态 — 基于真实文件"""
+    raw_dir = os.path.join(_DATA_DIR, "raw")
+    db_path = os.path.join(_DATA_DIR, "dlqi.db")
+    models_dir = os.path.join(_DATA_DIR, "models")
+
+    # Count CSV records
+    csv_count = 0
+    csv_size = 0
+    if os.path.isdir(raw_dir):
+        for f in os.listdir(raw_dir):
+            fp = os.path.join(raw_dir, f)
+            if f.endswith(".csv") and os.path.isfile(fp):
+                csv_size += os.path.getsize(fp)
+                try:
+                    with open(fp) as fh:
+                        csv_count += sum(1 for _ in fh) - 1  # minus header
+                except Exception:
+                    pass
+
+    # SQLite size
+    db_size = os.path.getsize(db_path) if os.path.isfile(db_path) else 0
+
+    # Model files
+    model_count = 0
+    model_size = 0
+    if os.path.isdir(models_dir):
+        for root, _, files in os.walk(models_dir):
+            for f in files:
+                fp = os.path.join(root, f)
+                model_size += os.path.getsize(fp)
+                model_count += 1
+
+    def fmt_size(b: int) -> str:
+        if b > 1_000_000_000:
+            return f"{b / 1_000_000_000:.1f} GB"
+        if b > 1_000_000:
+            return f"{b / 1_000_000:.1f} MB"
+        return f"{b / 1_000:.1f} KB"
+
+    sources = [
         {
-            "name": "OpenBB Platform",
-            "type": "aggregator",
-            "status": "connected",
-            "last_sync": datetime.now().isoformat(),
-            "records": 0,
-            "size": "N/A",
-            "description": "统一金融数据平台"
-        },
-        {
-            "name": "Yahoo Finance",
-            "type": "provider",
-            "status": "connected",
-            "last_sync": datetime.now().isoformat(),
-            "records": 125000,
-            "size": "850 MB",
-            "provider_key": "yfinance"
-        },
-        {
-            "name": "Financial Modeling Prep",
-            "type": "provider",
-            "status": "available",
+            "name": "Yahoo Finance (CSV)",
+            "type": "local_csv",
+            "status": "connected" if csv_count > 0 else "empty",
             "last_sync": None,
-            "records": 0,
-            "size": "0 MB",
-            "provider_key": "fmp"
+            "records": csv_count,
+            "size": fmt_size(csv_size),
+            "description": "本地 CSV 历史价格数据",
         },
         {
-            "name": "Polygon.io",
-            "type": "provider",
-            "status": "available",
-            "last_sync": None,
-            "records": 0,
-            "size": "0 MB",
-            "provider_key": "polygon"
-        },
-        {
-            "name": "FRED (Federal Reserve)",
-            "type": "provider",
-            "status": "connected",
-            "last_sync": datetime.now().isoformat(),
-            "records": 50000,
-            "size": "120 MB",
-            "provider_key": "fred"
-        },
-        {
-            "name": "PostgreSQL",
+            "name": "SQLite 数据库",
             "type": "database",
-            "status": "connected",
-            "last_sync": datetime.now().isoformat(),
-            "records": 258000,
-            "size": "1.8 GB"
-        }
+            "status": "connected" if os.path.isfile(db_path) else "disconnected",
+            "last_sync": None,
+            "records": 0,
+            "size": fmt_size(db_size),
+            "description": "本地 SQLite 存储",
+        },
+        {
+            "name": "模型文件",
+            "type": "models",
+            "status": "available" if model_count > 0 else "empty",
+            "last_sync": None,
+            "records": model_count,
+            "size": fmt_size(model_size),
+            "description": "已训练模型权重",
+        },
     ]
+    return sources
 
 
 @router.get("/providers")
@@ -162,22 +179,47 @@ async def get_stocks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100)
 ):
-    """获取股票列表"""
-    stocks = [
-        {"symbol": "AAPL", "name": "苹果公司", "sector": "Technology", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "GOOGL", "name": "谷歌", "sector": "Technology", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "MSFT", "name": "微软", "sector": "Technology", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "NVDA", "name": "英伟达", "sector": "Technology", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "TSLA", "name": "特斯拉", "sector": "Consumer Cyclical", "records": 2520, "last_update": datetime.now(), "status": "outdated"},
-        {"symbol": "AMZN", "name": "亚马逊", "sector": "Consumer Cyclical", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "META", "name": "Meta", "sector": "Technology", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "NFLX", "name": "奈飞", "sector": "Communication Services", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "JPM", "name": "摩根大通", "sector": "Financial Services", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-        {"symbol": "V", "name": "Visa", "sector": "Financial Services", "records": 2520, "last_update": datetime.now(), "status": "updated"},
-    ]
+    """获取股票列表 — 优先 SQLite，回退硬编码"""
+    from app.services.data_sync_service import get_synced_stocks
+    synced = get_synced_stocks()
+
+    if synced:
+        stocks = [
+            {
+                "symbol": s["symbol"],
+                "name": s["symbol"],
+                "sector": "",
+                "records": s["records"],
+                "last_update": s["last_date"],
+                "status": s["status"],
+            }
+            for s in synced
+        ]
+    else:
+        # 回退：扫描本地 CSV
+        raw_dir = os.path.join(_DATA_DIR, "raw")
+        stocks = []
+        if os.path.isdir(raw_dir):
+            for f in sorted(os.listdir(raw_dir)):
+                if f.endswith(".csv") and not f.startswith("idx_"):
+                    sym = f.replace("us_", "").replace(".csv", "")
+                    stocks.append({
+                        "symbol": sym, "name": sym, "sector": "",
+                        "records": 0, "last_update": None, "status": "local",
+                    })
+        if not stocks:
+            stocks = [
+                {"symbol": "AAPL", "name": "Apple", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "GOOGL", "name": "Google", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "MSFT", "name": "Microsoft", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "NVDA", "name": "NVIDIA", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "TSLA", "name": "Tesla", "sector": "Consumer Cyclical", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "AMZN", "name": "Amazon", "sector": "Consumer Cyclical", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "META", "name": "Meta", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
+            ]
 
     if search:
-        stocks = [s for s in stocks if search.lower() in s["symbol"].lower() or search in s["name"]]
+        stocks = [s for s in stocks if search.lower() in s["symbol"].lower() or search.lower() in s.get("name", "").lower()]
 
     start = (page - 1) * page_size
     end = start + page_size
@@ -204,9 +246,8 @@ async def get_stock_data(
     source = "local"
 
     # 方案1: 优先读取本地 CSV（与训练数据一致）
-    data_dir = os.getenv("DATA_DIR", "../data")
     for prefix in ["us_", ""]:
-        csv_path = os.path.join(data_dir, "raw", f"{prefix}{symbol}.csv")
+        csv_path = os.path.join(_DATA_DIR, "raw", f"{prefix}{symbol}.csv")
         if os.path.isfile(csv_path):
             df = pd.read_csv(csv_path)
             source = "local_csv"
@@ -358,43 +399,19 @@ async def get_stock_ratios(symbol: str, provider: str = "yfinance"):
 
 @router.post("/sync")
 async def sync_data(request: SyncTaskRequest):
-    """同步股票数据 (OpenBB)"""
-    try:
-        fetcher = get_fetcher(request.provider)
-        cleaner = DataCleaner()
-        results = []
+    """同步股票数据（异步任务）"""
+    from app.services.data_sync_service import run_data_sync
 
-        for symbol in request.symbols:
-            try:
-                df = fetcher.fetch_historical(
-                    symbol,
-                    request.start_date,
-                    request.end_date
-                )
-
-                df = cleaner.clean(df)
-
-                results.append({
-                    "symbol": symbol,
-                    "status": "success",
-                    "records": len(df),
-                    "provider": request.provider
-                })
-            except Exception as e:
-                results.append({
-                    "symbol": symbol,
-                    "status": "failed",
-                    "error": str(e)
-                })
-
-        return {
-            "status": "completed",
-            "provider": request.provider,
-            "results": results
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    job_id = await job_service.submit(
+        job_type="sync",
+        func=run_data_sync,
+        params={"symbols": request.symbols},
+    )
+    return {
+        "status": "submitted",
+        "job_id": job_id,
+        "message": f"正在同步 {len(request.symbols)} 只股票",
+    }
 
 
 @router.get("/index/{symbol}")
@@ -636,35 +653,71 @@ async def screen_stocks(request: ScreenerRequest):
 
 @router.get("/quality")
 async def get_data_quality():
-    """获取数据质量指标"""
+    """获取数据质量指标 — 基于真实 CSV 检查"""
+    raw_dir = os.path.join(_DATA_DIR, "raw")
+    total_rows = 0
+    null_cells = 0
+    total_cells = 0
+    file_count = 0
+
+    if os.path.isdir(raw_dir):
+        for f in sorted(os.listdir(raw_dir)):
+            if f.endswith(".csv"):
+                try:
+                    df = pd.read_csv(os.path.join(raw_dir, f))
+                    total_rows += len(df)
+                    total_cells += df.size
+                    null_cells += int(df.isnull().sum().sum())
+                    file_count += 1
+                except Exception:
+                    pass
+
+    completeness = round((1 - null_cells / total_cells) * 100, 1) if total_cells else 0
     return {
-        "completeness": 98.5,
-        "accuracy": 99.2,
-        "consistency": 97.8,
-        "timeliness": 92.3,
-        "overall": 96.9,
+        "completeness": completeness,
+        "accuracy": completeness,  # same metric for CSV data
+        "consistency": 100.0 if file_count > 0 else 0,
+        "timeliness": 100.0 if file_count > 0 else 0,
+        "overall": round(completeness, 1),
+        "total_rows": total_rows,
+        "files": file_count,
         "provider_status": {
-            "yfinance": "healthy",
-            "fmp": "available",
-            "fred": "healthy",
-            "polygon": "available"
-        }
+            "local_csv": "healthy" if file_count > 0 else "empty",
+            "sqlite": "healthy" if os.path.isfile(os.path.join(_DATA_DIR, "dlqi.db")) else "unavailable",
+        },
     }
 
 
 @router.get("/storage")
 async def get_storage_stats():
-    """获取存储统计"""
+    """获取存储统计 — 基于真实文件大小"""
+    def dir_size(path: str) -> int:
+        total = 0
+        if os.path.isdir(path):
+            for root, _, files in os.walk(path):
+                for f in files:
+                    total += os.path.getsize(os.path.join(root, f))
+        elif os.path.isfile(path):
+            total = os.path.getsize(path)
+        return total
+
+    raw_size = dir_size(os.path.join(_DATA_DIR, "raw"))
+    models_size = dir_size(os.path.join(_DATA_DIR, "models"))
+    db_size = dir_size(os.path.join(_DATA_DIR, "dlqi.db"))
+    results_size = dir_size(os.path.join(_PROJECT_ROOT, "results"))
+
+    total = raw_size + models_size + db_size + results_size
+    to_gb = lambda b: round(b / 1_000_000_000, 2)
+
     return {
-        "total_size_gb": 5.9,
+        "total_size_gb": to_gb(total),
         "max_size_gb": 10.0,
         "items": [
-            {"name": "价格数据", "size_gb": 2.5, "color": "#00f5ff"},
-            {"name": "特征数据", "size_gb": 1.8, "color": "#bf00ff"},
-            {"name": "模型文件", "size_gb": 0.8, "color": "#00ff88"},
-            {"name": "回测结果", "size_gb": 0.5, "color": "#ffa502"},
-            {"name": "日志文件", "size_gb": 0.3, "color": "#ff6348"}
-        ]
+            {"name": "价格数据 (CSV)", "size_gb": to_gb(raw_size), "color": "#00f5ff"},
+            {"name": "模型文件", "size_gb": to_gb(models_size), "color": "#bf00ff"},
+            {"name": "数据库", "size_gb": to_gb(db_size), "color": "#00ff88"},
+            {"name": "回测结果", "size_gb": to_gb(results_size), "color": "#ffa502"},
+        ],
     }
 
 

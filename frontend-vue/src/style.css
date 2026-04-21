@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { font-family: 'Inter', system-ui, sans-serif; }
+  body {
+    background-color: #0a0a0a;
+    color: #e5e7eb;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #111111; }
+  ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+}
+
+@layer components {
+  .t-card {
+    @apply bg-terminal-card border border-terminal-border rounded p-4;
+  }
+  .t-btn {
+    @apply px-3 py-1.5 rounded text-sm font-medium transition-colors cursor-pointer border-0;
+  }
+  .t-btn-primary {
+    @apply t-btn bg-accent-blue hover:bg-accent-blue-dim text-white;
+  }
+  .t-btn-ghost {
+    @apply t-btn bg-transparent hover:bg-terminal-surface text-terminal-muted hover:text-terminal-text border border-terminal-border;
+  }
+  .t-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono;
+  }
+  .t-table { @apply w-full text-sm; }
+  .t-table th {
+    @apply text-terminal-dim font-medium text-xs uppercase tracking-wider py-2 px-3 text-left border-b border-terminal-border;
+  }
+  .t-table td {
+    @apply py-2 px-3 border-b border-terminal-border/50 font-mono text-xs;
+  }
+  .t-table tr:hover td { @apply bg-terminal-surface/50; }
+  .gain { @apply text-gain; }
+  .loss { @apply text-loss; }
+  .mono { @apply font-mono; }
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+}

@@ -88,6 +88,11 @@ Thumbs.db
 *.temp
 tmp/
 temp/
+~$*
+
+# Local tool config
+.mcp.json
+.playwright-mcp/
 
 # Reports
 claudedocs/*

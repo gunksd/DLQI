@@ -34,6 +34,8 @@ export const api = {
     end_date: string;
   }) => r(http.post("/data/sync", data)),
   getDataSources: () => r(http.get("/data/sources")),
+  getDataQuality: () => r(http.get("/data/quality")),
+  getStorageStats: () => r(http.get("/data/storage")),
 
   getModels: (params?: { symbol?: string; model_type?: string }) =>
     r(http.get("/models/", { params })),
@@ -95,7 +97,8 @@ export const api = {
   deletePortfolio: (id: string) =>
     r(http.delete(`/paper-trading/portfolios/${id}`)),
 
-  getRecommendedStrategy: () => r(http.get("/backtest/recommend")),
+  getRecommendedStrategy: (symbol?: string) =>
+    r(http.get("/backtest/recommend", { params: { symbol } })),
   deployStrategy: (data: {
     model_id: string;
     initial_capital?: number;

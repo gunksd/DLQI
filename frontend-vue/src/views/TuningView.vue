@@ -161,9 +161,9 @@ use([CanvasRenderer, ScatterChart, GridComponent, TooltipComponent])
 
 // 训练配置
 const trainMode = ref<'single' | 'multi'>('single')
-const trainSymbol = ref('AAPL')
+const trainSymbol = ref('600519')
 const trainModelType = ref('transformer')
-const trainSymbols = ['AAPL', 'AMZN', 'GOOGL', 'MSFT', 'NVDA']
+const trainSymbols = ['600519', '601318', '600036', '300750', '002594']
 
 // 训练状态
 const training = ref(false)

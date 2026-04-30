@@ -148,9 +148,9 @@ export const fmtNum = (v?: number | null, digits = 4): string => {
 
 export const fmtMoney = (v?: number | null): string => {
   if (v == null || isNaN(v)) return "—";
-  return v.toLocaleString("en-US", {
+  return v.toLocaleString("zh-CN", {
     style: "currency",
-    currency: "USD",
+    currency: "CNY",
     maximumFractionDigits: 0,
   });
 };

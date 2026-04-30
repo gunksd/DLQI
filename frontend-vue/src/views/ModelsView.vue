@@ -85,7 +85,7 @@ const error = ref('')
 const filterSymbol = ref('')
 const filterType = ref('')
 
-const symbols = ['AAPL', 'AMZN', 'GOOGL', 'MSFT', 'NVDA']
+const symbols = ['600519', '601318', '600036', '300750', '002594']
 
 const filteredModels = computed(() =>
   models.value

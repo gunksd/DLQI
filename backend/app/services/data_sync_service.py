@@ -1,5 +1,5 @@
 """
-数据同步服务 — yfinance 下载 + PostgreSQL 存储
+数据同步服务 — AKShare 下载 A 股数据 + PostgreSQL 存储
 """
 
 import os
@@ -16,7 +16,7 @@ def run_data_sync(params: dict, progress_cb: Callable) -> dict:
     数据同步任务（在线程池中执行）
     params: {symbols: [...]}
     """
-    import yfinance as yf
+    import akshare as ak
 
     symbols: List[str] = params.get("symbols", [])
     if not symbols:
@@ -30,22 +30,28 @@ def run_data_sync(params: dict, progress_cb: Callable) -> dict:
         progress_cb(pct, f"下载 {symbol} ({i+1}/{total})")
 
         try:
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period="5y", auto_adjust=True).reset_index()
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date="20160101",
+                end_date=datetime.now().strftime("%Y%m%d"),
+                adjust="qfq",
+            )
             df = df.rename(columns={
-                "Date": "date", "Open": "open", "High": "high",
-                "Low": "low", "Close": "close", "Volume": "volume",
+                "日期": "date", "开盘": "open", "最高": "high",
+                "最低": "low", "收盘": "close", "成交量": "volume",
             })
-            df["date"] = df["date"].dt.tz_localize(None)
+            df = df[["date", "open", "high", "low", "close", "volume"]]
+            df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
 
             if df.empty:
                 results.append({"symbol": symbol, "status": "failed", "error": "无数据"})
                 continue
 
-            # 保存到 CSV（与现有管道兼容）
+            # 保存到 CSV
             raw_dir = os.path.join(settings.DATA_DIR, "raw")
             os.makedirs(raw_dir, exist_ok=True)
-            csv_path = os.path.join(raw_dir, f"us_{symbol}.csv")
+            csv_path = os.path.join(raw_dir, f"cn_{symbol}.csv")
             df.to_csv(csv_path, index=False)
 
             # 写入 PostgreSQL

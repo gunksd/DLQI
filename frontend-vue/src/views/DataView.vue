@@ -59,7 +59,7 @@
             <span class="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             批量下载中...
           </span>
-          <span v-else>S&amp;P 500 批量下载</span>
+          <span v-else>A股核心批量下载</span>
         </button>
       </div>
     </div>
@@ -159,7 +159,7 @@ import { ref, computed, onMounted } from 'vue'
 import { api } from '@/composables/api'
 import { useDataStore } from '@/stores/data'
 
-const allSymbols = ['AAPL', 'AMZN', 'GOOGL', 'MSFT', 'NVDA']
+const allSymbols = ['600519', '601318', '600036', '300750', '002594']
 const selectedSymbols = ref<string[]>([...allSymbols])
 
 const today = new Date().toISOString().slice(0, 10)
@@ -225,19 +225,18 @@ async function syncSingle(symbol: string) {
   }
 }
 
-const sp500Core = [
-  'AAPL','MSFT','AMZN','NVDA','GOOGL','META','TSLA','BRK-B','LLY','AVGO',
-  'JPM','UNH','XOM','V','PG','MA','COST','JNJ','HD','MRK',
-  'ABBV','WMT','NFLX','BAC','CRM','CVX','KO','AMD','PEP','LIN',
-  'TMO','ORCL','ACN','MCD','CSCO','ADBE','ABT','WFC','DHR','GE',
-  'TXN','PM','QCOM','INTU','CMCSA','DIS','VZ','AMGN','IBM','CAT',
+const cnCore = [
+  '600519','601318','600036','300750','002594',
+  '000858','000333','601012','600276','002475',
+  '600900','601166','000001','600030','601888',
+  '300059','002352','600585','000568','601398',
 ]
 
 async function handleBatchDownload() {
   batchSyncing.value = true
   try {
-    await api.syncData({ symbols: sp500Core, start_date: '2016-01-01', end_date: today })
-    showToast('success', `已提交 ${sp500Core.length} 只股票批量下载`)
+    await api.syncData({ symbols: cnCore, start_date: '2016-01-01', end_date: today })
+    showToast('success', `已提交 ${cnCore.length} 只股票批量下载`)
     await dataStore.loadStocks(true)
     await loadQualityAndStorage()
   } catch (e: any) {

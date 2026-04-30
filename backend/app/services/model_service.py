@@ -356,7 +356,7 @@ class ModelManager:
             # 加载真实数据
             import glob as glob_mod
             raw_dir = os.path.join(os.path.dirname(self._models_dir), 'raw')
-            csv_files = sorted(glob_mod.glob(os.path.join(raw_dir, 'us_*.csv')))
+            csv_files = sorted(glob_mod.glob(os.path.join(raw_dir, 'cn_*.csv')))
             csv_files = [f for f in csv_files if 'idx_' not in os.path.basename(f)][:5]
 
             all_seqs = []

@@ -10,7 +10,7 @@ pandas==2.1.4
 numpy==1.26.3
 
 # Data Sources
-yfinance==0.2.35
+akshare>=1.14.0
 
 # Technical Indicators
 pandas-ta==0.3.14b0

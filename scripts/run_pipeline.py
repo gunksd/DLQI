@@ -301,7 +301,7 @@ def calculate_metrics(portfolio, benchmark, daily_returns, trades, initial_capit
 
 
 # ── 单模型回测流程 ──
-MULTI_TEST_SYMBOLS = ["AAPL", "AMZN", "GOOGL", "MSFT", "NVDA"]
+MULTI_TEST_SYMBOLS = ["600519", "601318", "600036", "300750", "002594"]
 
 def backtest_single_model(model_dir: Path, seq_length=60, test_ratio=0.2):
     model, scaler, meta = load_model(model_dir)
@@ -314,7 +314,7 @@ def backtest_single_model(model_dir: Path, seq_length=60, test_ratio=0.2):
         return backtest_multi_model(model, scaler, meta, seq_length, test_ratio)
 
     # 加载数据
-    csv_path = RAW_DIR / f"us_{symbol}.csv"
+    csv_path = RAW_DIR / f"cn_{symbol}.csv"
     if not csv_path.exists():
         return None
     df = pd.read_csv(csv_path)
@@ -391,7 +391,7 @@ def backtest_multi_model(model, scaler, meta, seq_length=60, test_ratio=0.2):
     results = []
 
     for symbol in MULTI_TEST_SYMBOLS:
-        csv_path = RAW_DIR / f"us_{symbol}.csv"
+        csv_path = RAW_DIR / f"cn_{symbol}.csv"
         if not csv_path.exists():
             continue
 

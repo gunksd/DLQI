@@ -177,7 +177,7 @@ const recError = ref('')
 const deploying = ref(false)
 const deployMsg = ref<{ ok: boolean; text: string } | null>(null)
 
-const symbols = ['AAPL', 'AMZN', 'GOOGL', 'MSFT', 'NVDA']
+const symbols = ['600519', '601318', '600036', '300750', '002594']
 
 const filteredBacktests = computed(() => {
   return [...backtests.value]
@@ -247,7 +247,7 @@ const chartOption = computed(() => ({
     axisLabel: {
       color: '#6b7280',
       fontSize: 10,
-      formatter: (v: number) => '$' + v.toLocaleString(),
+      formatter: (v: number) => '¥' + v.toLocaleString(),
     },
     splitLine: { lineStyle: { color: '#1a1a1a' } },
   },
@@ -310,12 +310,12 @@ async function deployBest() {
   try {
     const res = await api.deployStrategy({
       model_id: recommend.value.best.model_id,
-      initial_capital: 100000,
+      initial_capital: 1000000,
       days: 120,
     })
     deployMsg.value = {
       ok: true,
-      text: `主策略已部署为模拟组合「${res.portfolio?.name}」，最终净值 $${res.simulation?.final_value?.toLocaleString() ?? '-'}`,
+      text: `主策略已部署为模拟组合「${res.portfolio?.name}」，最终净值 ¥${res.simulation?.final_value?.toLocaleString() ?? '-'}`,
     }
   } catch (e: any) {
     deployMsg.value = { ok: false, text: e?.message ?? '部署失败' }

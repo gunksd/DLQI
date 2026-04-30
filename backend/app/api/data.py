@@ -202,20 +202,18 @@ async def get_stocks(
         if os.path.isdir(raw_dir):
             for f in sorted(os.listdir(raw_dir)):
                 if f.endswith(".csv") and not f.startswith("idx_"):
-                    sym = f.replace("us_", "").replace(".csv", "")
+                    sym = f.replace("cn_", "").replace(".csv", "")
                     stocks.append({
                         "symbol": sym, "name": sym, "sector": "",
                         "records": 0, "last_update": None, "status": "local",
                     })
         if not stocks:
             stocks = [
-                {"symbol": "AAPL", "name": "Apple", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
-                {"symbol": "GOOGL", "name": "Google", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
-                {"symbol": "MSFT", "name": "Microsoft", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
-                {"symbol": "NVDA", "name": "NVIDIA", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
-                {"symbol": "TSLA", "name": "Tesla", "sector": "Consumer Cyclical", "records": 0, "last_update": None, "status": "not_synced"},
-                {"symbol": "AMZN", "name": "Amazon", "sector": "Consumer Cyclical", "records": 0, "last_update": None, "status": "not_synced"},
-                {"symbol": "META", "name": "Meta", "sector": "Technology", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "600519", "name": "贵州茅台", "sector": "白酒", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "601318", "name": "中国平安", "sector": "保险", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "600036", "name": "招商银行", "sector": "银行", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "300750", "name": "宁德时代", "sector": "新能源", "records": 0, "last_update": None, "status": "not_synced"},
+                {"symbol": "002594", "name": "比亚迪", "sector": "汽车", "records": 0, "last_update": None, "status": "not_synced"},
             ]
 
     if search:
@@ -246,7 +244,7 @@ async def get_stock_data(
     source = "local"
 
     # 方案1: 优先读取本地 CSV（与训练数据一致）
-    for prefix in ["us_", ""]:
+    for prefix in ["cn_", ""]:
         csv_path = os.path.join(_DATA_DIR, "raw", f"{prefix}{symbol}.csv")
         if os.path.isfile(csv_path):
             df = pd.read_csv(csv_path)

@@ -108,7 +108,7 @@ const corrError = ref('')
 const corrSymbols = ref<string[]>([])
 const corrMatrix = ref<[number, number, number][]>([])
 
-const symbols = ['AAPL', 'AMZN', 'GOOGL', 'MSFT', 'NVDA']
+const symbols = ['600519', '601318', '600036', '300750', '002594']
 
 const filteredBacktests = computed(() => {
   const field = sortField.value

@@ -22,7 +22,7 @@
               class="w-full bg-terminal-bg border border-terminal-border text-terminal-text text-sm px-3 py-2 rounded focus:outline-none focus:border-accent-blue" />
           </div>
           <div>
-            <label class="block text-terminal-muted text-xs mb-1">初始资金 (USD)</label>
+            <label class="block text-terminal-muted text-xs mb-1">初始资金 (CNY)</label>
             <input v-model.number="form.initial_capital" type="number" min="1000"
               class="w-full bg-terminal-bg border border-terminal-border text-terminal-text font-mono text-sm px-3 py-2 rounded focus:outline-none focus:border-accent-blue" />
           </div>
@@ -202,7 +202,7 @@ interface ModelOption { id: string; name: string; symbol: string; model_type: st
 const availableModels = ref<ModelOption[]>([])
 const modelsLoading = ref(false)
 
-const form = ref({ name: '', initial_capital: 100000, model_id: '', symbol: '', days: 90 })
+const form = ref({ name: '', initial_capital: 1000000, model_id: '', symbol: '', days: 90 })
 
 function onModelSelect() {
   const m = availableModels.value.find(m => m.id === form.value.model_id)
@@ -250,7 +250,7 @@ const equityOption = computed(() => {
     grid: { top: 16, right: 16, bottom: 32, left: 64 },
     tooltip: { trigger: 'axis', backgroundColor: '#1a1a1a', borderColor: '#2a2a2a', textStyle: { color: '#e5e7eb', fontSize: 11 } },
     xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: '#2a2a2a' } }, axisLabel: { color: '#6b7280', fontSize: 10 } },
-    yAxis: { type: 'value', axisLine: { lineStyle: { color: '#2a2a2a' } }, splitLine: { lineStyle: { color: '#1a1a1a' } }, axisLabel: { color: '#6b7280', fontSize: 10, formatter: (v: number) => `$${(v / 1000).toFixed(0)}k` } },
+    yAxis: { type: 'value', axisLine: { lineStyle: { color: '#2a2a2a' } }, splitLine: { lineStyle: { color: '#1a1a1a' } }, axisLabel: { color: '#6b7280', fontSize: 10, formatter: (v: number) => `¥${(v / 10000).toFixed(0)}万` } },
     series: [{ type: 'line', data: values, smooth: true, symbol: 'none', lineStyle: { color: '#3b82f6', width: 2 }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.25)' }, { offset: 1, color: 'rgba(59,130,246,0)' }] } } }],
   }
 })
@@ -322,7 +322,7 @@ async function handleCreate() {
 
 function closeCreate() {
   showCreate.value = false
-  form.value = { name: '', initial_capital: 100000, model_id: '', symbol: '', days: 90 }
+  form.value = { name: '', initial_capital: 1000000, model_id: '', symbol: '', days: 90 }
 }
 
 async function handleSimulate(id: string) {

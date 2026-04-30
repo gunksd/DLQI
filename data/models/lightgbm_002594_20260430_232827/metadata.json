@@ -1,0 +1,25 @@
+{
+  "model_id": "lightgbm_002594_20260430_232827",
+  "model_type": "lightgbm",
+  "symbol": "002594",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "returns",
+    "ma_5",
+    "ma_20",
+    "volatility",
+    "rsi",
+    "macd",
+    "macd_signal"
+  ],
+  "data_points": 2487,
+  "metrics": {
+    "val_rmse": 0.020577,
+    "direction_accuracy": 0.4588
+  },
+  "created_at": "2026-04-30T23:28:27.497334"
+}

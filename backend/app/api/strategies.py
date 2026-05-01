@@ -231,6 +231,10 @@ async def get_strategy_signals(
     limit: int = Query(100, ge=1, le=500)
 ):
     """获取策略信号"""
+    # 真实价格范围映射
+    price_map = {"600519": 1385, "601318": 59, "600036": 38, "300750": 436, "002594": 103}
+    base_price = price_map.get(symbol, 100)
+
     signals = []
     base_date = datetime.now()
 
@@ -245,7 +249,7 @@ async def get_strategy_signals(
                 "symbol": symbol,
                 "signal": signal_type,
                 "confidence": round(confidence, 4),
-                "price": round(180 + random.uniform(-10, 10), 2),
+                "price": round(base_price * (1 + random.uniform(-0.03, 0.03)), 2),
                 "indicators": {
                     "rsi": round(random.uniform(20, 80), 2),
                     "macd": round(random.uniform(-2, 2), 4),
@@ -268,38 +272,38 @@ async def get_strategy_positions(strategy_id: int):
         {
             "symbol": "600519",
             "quantity": 100,
-            "avg_cost": 1680.50,
-            "current_price": 1720.30,
-            "unrealized_pnl": 3980.0,
-            "unrealized_pnl_pct": 0.0237,
-            "weight": 0.15
+            "avg_cost": 1350.00,
+            "current_price": 1384.79,
+            "unrealized_pnl": 3479.0,
+            "unrealized_pnl_pct": 0.0258,
+            "weight": 0.25
         },
         {
             "symbol": "601318",
-            "quantity": 500,
-            "avg_cost": 48.80,
-            "current_price": 51.50,
-            "unrealized_pnl": 1350.0,
-            "unrealized_pnl_pct": 0.0553,
-            "weight": 0.12
+            "quantity": 1000,
+            "avg_cost": 56.80,
+            "current_price": 59.37,
+            "unrealized_pnl": 2570.0,
+            "unrealized_pnl_pct": 0.0453,
+            "weight": 0.11
         },
         {
             "symbol": "600036",
-            "quantity": 800,
-            "avg_cost": 35.20,
-            "current_price": 37.40,
-            "unrealized_pnl": 1760.0,
-            "unrealized_pnl_pct": 0.0625,
-            "weight": 0.18
+            "quantity": 1500,
+            "avg_cost": 36.50,
+            "current_price": 38.27,
+            "unrealized_pnl": 2655.0,
+            "unrealized_pnl_pct": 0.0485,
+            "weight": 0.10
         },
         {
             "symbol": "300750",
             "quantity": 200,
-            "avg_cost": 185.60,
-            "current_price": 192.30,
-            "unrealized_pnl": 801.0,
-            "unrealized_pnl_pct": 0.0550,
-            "weight": 0.10
+            "avg_cost": 420.00,
+            "current_price": 436.00,
+            "unrealized_pnl": 3200.0,
+            "unrealized_pnl_pct": 0.0381,
+            "weight": 0.16
         }
     ]
 
@@ -328,14 +332,16 @@ async def get_strategy_trades(
     trades = []
     base_date = datetime.now()
     symbols = ["600519", "601318", "600036", "300750", "002594"]
+    price_map = {"600519": 1385, "601318": 59, "600036": 38, "300750": 436, "002594": 103}
 
     for i in range(limit):
         date = base_date - timedelta(days=i // 3)
         symbol = random.choice(symbols)
         direction = random.choice(["buy", "sell"])
-        quantity = random.randint(10, 100)
-        price = round(random.uniform(100, 500), 2)
-        commission = round(price * quantity * 0.0003, 2)
+        base_price = price_map.get(symbol, 100)
+        price = round(base_price * (1 + random.uniform(-0.03, 0.03)), 2)
+        quantity = random.choice([100, 200, 300, 500, 1000])
+        commission = round(price * quantity * 0.00025, 2)
 
         pnl = None
         if direction == "sell":

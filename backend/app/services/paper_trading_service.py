@@ -118,10 +118,21 @@ def simulate_history(pid: str, days: int = 120) -> dict:
 
     symbol = model_info["symbol"]
 
-    import akshare as ak
-    df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date="20230101", adjust="qfq")
-    df = df.rename(columns={"日期":"date","开盘":"open","最高":"high","最低":"low","收盘":"close","成交量":"volume"})
-    hist = df[["date","open","high","low","close","volume"]].copy()
+    # 优先使用本地 CSV 数据，避免网络依赖
+    import os
+    from app.core.config import settings
+    target_symbol = symbol
+    if symbol == "MULTI":
+        target_symbol = settings.STOCK_POOL[0]  # 默认用第一只股票
+
+    csv_path = os.path.join(settings.DATA_DIR, "raw", f"cn_{target_symbol}.csv")
+    if os.path.isfile(csv_path):
+        hist = pd.read_csv(csv_path)
+    else:
+        import akshare as ak
+        df = ak.stock_zh_a_hist(symbol=target_symbol, period="daily", start_date="20160101", adjust="qfq")
+        df = df.rename(columns={"日期":"date","开盘":"open","最高":"high","最低":"low","收盘":"close","成交量":"volume"})
+        hist = df[["date","open","high","low","close","volume"]].copy()
 
     if len(hist) < 100:
         raise ValueError(f"历史数据不足: 仅 {len(hist)} 条")

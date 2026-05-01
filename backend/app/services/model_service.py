@@ -82,6 +82,32 @@ if HAS_TORCH:
             x = self.transformer(x, mask=mask)
             return self.fc(x[:, -1, :])
 
+    class TransformerClassifier(nn.Module):
+        def __init__(self, input_size, d_model=64, nhead=4, num_layers=2, dropout=0.3):
+            super().__init__()
+            self.input_proj = nn.Linear(input_size, d_model)
+            pe = torch.zeros(500, d_model)
+            position = torch.arange(0, 500, dtype=torch.float).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            self.register_buffer('pe', pe.unsqueeze(0))
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=d_model, nhead=nhead, dim_feedforward=d_model * 4,
+                dropout=dropout, batch_first=True)
+            self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
+            self.fc = nn.Sequential(
+                nn.Linear(d_model, d_model // 2), nn.GELU(), nn.Dropout(dropout),
+                nn.Linear(d_model // 2, 2))
+
+        def forward(self, x):
+            seq_len = x.size(1)
+            x = self.input_proj(x)
+            x = x + self.pe[:, :seq_len, :]
+            mask = nn.Transformer.generate_square_subsequent_mask(seq_len, device=x.device)
+            x = self.transformer(x, mask=mask)
+            return self.fc(x[:, -1, :])
+
 
 # ==================== 模型服务 ====================
 
@@ -188,7 +214,11 @@ class ModelManager:
             model.eval()
 
         elif model_type == 'transformer':
-            model = TransformerModel(input_size=input_size)
+            task_type = meta.get('task_type', 'regression')
+            if task_type == 'classification':
+                model = TransformerClassifier(input_size=input_size)
+            else:
+                model = TransformerModel(input_size=input_size)
             state = torch.load(
                 os.path.join(model_dir, 'model.pt'),
                 map_location=self._device,
@@ -266,9 +296,15 @@ class ModelManager:
 
         # 推理
         if model_type in ('lstm', 'transformer'):
+            task_type = meta.get('task_type', 'regression')
             with torch.no_grad():
                 tensor = torch.FloatTensor(X_seq).to(self._device)
-                preds = model(tensor).squeeze().cpu().numpy()
+                out = model(tensor)
+                if task_type == 'classification':
+                    # 分类模型：logits[1] - logits[0] 作为信号
+                    preds = (out[:, 1] - out[:, 0]).cpu().numpy()
+                else:
+                    preds = out.squeeze().cpu().numpy()
         elif model_type == 'lightgbm':
             X_flat = X_seq.reshape(X_seq.shape[0], -1)
             preds = model.predict(X_flat)

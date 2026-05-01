@@ -225,7 +225,7 @@ async def deactivate_strategy(strategy_id: int):
 @router.get("/{strategy_id}/signals")
 async def get_strategy_signals(
     strategy_id: int,
-    symbol: str = "AAPL",
+    symbol: str = "600519",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500)
@@ -266,37 +266,37 @@ async def get_strategy_positions(strategy_id: int):
     """获取当前持仓"""
     positions = [
         {
-            "symbol": "AAPL",
+            "symbol": "600519",
             "quantity": 100,
-            "avg_cost": 175.50,
-            "current_price": 182.30,
-            "unrealized_pnl": 680.0,
-            "unrealized_pnl_pct": 0.0387,
+            "avg_cost": 1680.50,
+            "current_price": 1720.30,
+            "unrealized_pnl": 3980.0,
+            "unrealized_pnl_pct": 0.0237,
             "weight": 0.15
         },
         {
-            "symbol": "GOOGL",
-            "quantity": 50,
-            "avg_cost": 142.80,
-            "current_price": 148.50,
-            "unrealized_pnl": 285.0,
-            "unrealized_pnl_pct": 0.0399,
+            "symbol": "601318",
+            "quantity": 500,
+            "avg_cost": 48.80,
+            "current_price": 51.50,
+            "unrealized_pnl": 1350.0,
+            "unrealized_pnl_pct": 0.0553,
             "weight": 0.12
         },
         {
-            "symbol": "MSFT",
-            "quantity": 80,
-            "avg_cost": 378.20,
-            "current_price": 392.40,
-            "unrealized_pnl": 1136.0,
-            "unrealized_pnl_pct": 0.0375,
+            "symbol": "600036",
+            "quantity": 800,
+            "avg_cost": 35.20,
+            "current_price": 37.40,
+            "unrealized_pnl": 1760.0,
+            "unrealized_pnl_pct": 0.0625,
             "weight": 0.18
         },
         {
-            "symbol": "NVDA",
-            "quantity": 30,
-            "avg_cost": 485.60,
-            "current_price": 512.30,
+            "symbol": "300750",
+            "quantity": 200,
+            "avg_cost": 185.60,
+            "current_price": 192.30,
             "unrealized_pnl": 801.0,
             "unrealized_pnl_pct": 0.0550,
             "weight": 0.10
@@ -327,7 +327,7 @@ async def get_strategy_trades(
     """获取交易记录"""
     trades = []
     base_date = datetime.now()
-    symbols = ["AAPL", "GOOGL", "MSFT", "NVDA", "TSLA", "AMZN", "META"]
+    symbols = ["600519", "601318", "600036", "300750", "002594"]
 
     for i in range(limit):
         date = base_date - timedelta(days=i // 3)

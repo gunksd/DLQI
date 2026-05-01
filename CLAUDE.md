@@ -3,7 +3,8 @@
 ## 项目概述
 
 DLQI（Deep Learning Quantitative Intelligence）是一个量化交易研究平台，用于毕业论文研究。
-使用深度学习模型（LSTM、Transformer、LightGBM、XGBoost）对 5 只美股（AAPL、AMZN、GOOGL、MSFT、NVDA）进行预测和回测。
+使用深度学习模型（LSTM、Transformer、LightGBM、XGBoost）对 5 只 A 股（贵州茅台、中国平安、招商银行、宁德时代、比亚迪）进行预测和回测。
+数据源：AKShare（A 股前复权日线，10 年历史数据）。
 
 **单用户本地使用，无需认证。**
 

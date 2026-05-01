@@ -53,8 +53,8 @@ def _load_returns_from_csv() -> Dict[str, list]:
     returns_dict = {}
     if os.path.isdir(raw_dir):
         for f in sorted(os.listdir(raw_dir)):
-            if f.startswith("us_") and f.endswith(".csv") and "idx_" not in f:
-                sym = f.replace("us_", "").replace(".csv", "")
+            if f.startswith("cn_") and f.endswith(".csv") and "idx_" not in f:
+                sym = f.replace("cn_", "").replace(".csv", "")
                 try:
                     df = pd.read_csv(os.path.join(raw_dir, f))
                     col = 'close' if 'close' in df.columns else 'Close'
@@ -279,7 +279,7 @@ async def get_correlation_matrix():
 async def run_stress_test(request: StressTestRequest):
     """运行压力测试 — 基于真实历史数据"""
     returns_dict = _load_returns_from_csv()
-    symbols = list(returns_dict.keys())[:5] or ["AAPL", "AMZN", "GOOGL", "MSFT", "NVDA"]
+    symbols = list(returns_dict.keys())[:5] or ["600519", "601318", "600036", "300750", "002594"]
 
     # 用真实数据计算各场景影响
     def _worst_period(rets: list, window: int = 20) -> float:

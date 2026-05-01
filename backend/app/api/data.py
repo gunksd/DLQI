@@ -1,5 +1,5 @@
 """
-数据管理 API - yfinance + SQLite
+数据管理 API - AKShare + CSV
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -36,7 +36,7 @@ class StockDataRequest(BaseModel):
     symbol: str
     start_date: str
     end_date: str
-    provider: str = "yfinance"  # yfinance, fmp, polygon, intrinio
+    provider: str = "akshare"  # akshare
     interval: str = "1d"  # 1m, 5m, 15m, 30m, 1h, 1d, 1w, 1mo
 
 
@@ -63,7 +63,7 @@ class SyncTaskRequest(BaseModel):
     symbols: List[str]
     start_date: str
     end_date: str
-    provider: str = "yfinance"
+    provider: str = "akshare"
 
 
 class ScreenerRequest(BaseModel):
@@ -129,13 +129,13 @@ async def get_data_sources():
 
     sources = [
         {
-            "name": "Yahoo Finance (CSV)",
+            "name": "AKShare (CSV)",
             "type": "local_csv",
             "status": "connected" if csv_count > 0 else "empty",
             "last_sync": None,
             "records": csv_count,
             "size": fmt_size(csv_size),
-            "description": "本地 CSV 历史价格数据",
+            "description": "本地 CSV A 股历史价格数据",
         },
         {
             "name": "SQLite 数据库",
@@ -163,13 +163,9 @@ async def get_data_sources():
 async def get_providers():
     """获取可用的数据提供商列表"""
     return {
-        "equity": ["yfinance", "fmp", "polygon", "intrinio", "tiingo"],
-        "index": ["yfinance", "fmp"],
-        "etf": ["yfinance", "fmp"],
-        "crypto": ["yfinance", "polygon", "coinbase"],
-        "forex": ["yfinance", "polygon", "fmp"],
-        "economy": ["fred", "oecd", "econdb"],
-        "news": ["benzinga", "fmp", "polygon"]
+        "equity": ["akshare"],
+        "index": ["akshare"],
+        "etf": ["akshare"],
     }
 
 
@@ -236,7 +232,7 @@ async def get_stock_data(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     interval: str = "1d",
-    provider: str = "yfinance",
+    provider: str = "akshare",
     limit: int = Query(500, ge=10, le=2000),
 ):
     """获取单只股票历史数据 — 优先本地 CSV，回退到 OpenBB"""
@@ -337,7 +333,7 @@ async def get_stock_financials(
     symbol: str,
     statement: str = Query("income", description="income, balance, cashflow"),
     period: str = Query("annual", description="annual, quarter"),
-    provider: str = "yfinance"
+    provider: str = "akshare"
 ):
     """获取财务报表 (OpenBB)"""
     try:
@@ -417,7 +413,7 @@ async def get_index_data(
     symbol: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    provider: str = "yfinance"
+    provider: str = "akshare"
 ):
     """获取指数数据 (OpenBB)"""
     try:
@@ -454,7 +450,7 @@ async def get_etf_data(
     symbol: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    provider: str = "yfinance"
+    provider: str = "akshare"
 ):
     """获取ETF数据 (OpenBB)"""
     try:
@@ -514,7 +510,7 @@ async def get_etf_holdings(symbol: str, provider: str = "yfinance"):
 async def get_news(
     symbols: Optional[str] = Query(None, description="逗号分隔的股票代码"),
     limit: int = Query(20, ge=1, le=100),
-    provider: str = "yfinance"
+    provider: str = "akshare"
 ):
     """获取市场新闻 (OpenBB)"""
     try:
@@ -681,7 +677,6 @@ async def get_data_quality():
         "files": file_count,
         "provider_status": {
             "local_csv": "healthy" if file_count > 0 else "empty",
-            "sqlite": "healthy" if os.path.isfile(os.path.join(_DATA_DIR, "dlqi.db")) else "unavailable",
         },
     }
 
@@ -724,7 +719,7 @@ async def get_features(
     symbol: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    provider: str = "yfinance"
+    provider: str = "akshare"
 ):
     """获取股票特征数据 (OpenBB + 技术指标)"""
     try:
@@ -767,7 +762,7 @@ async def batch_fetch(
     symbols: str = Query(..., description="逗号分隔的股票代码"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    provider: str = "yfinance"
+    provider: str = "akshare"
 ):
     """批量获取多只股票数据 (OpenBB)"""
     try:

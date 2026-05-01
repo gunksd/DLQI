@@ -118,11 +118,10 @@ def simulate_history(pid: str, days: int = 120) -> dict:
 
     symbol = model_info["symbol"]
 
-    import yfinance as yf
-    ticker = yf.Ticker(symbol)
-    hist = ticker.history(period=f"{days + 200}d", auto_adjust=True).reset_index()
-    hist = hist.rename(columns={"Date":"date","Open":"open","High":"high","Low":"low","Close":"close","Volume":"volume"})
-    hist["date"] = hist["date"].dt.tz_localize(None)
+    import akshare as ak
+    df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date="20230101", adjust="qfq")
+    df = df.rename(columns={"日期":"date","开盘":"open","最高":"high","最低":"low","收盘":"close","成交量":"volume"})
+    hist = df[["date","open","high","low","close","volume"]].copy()
 
     if len(hist) < 100:
         raise ValueError(f"历史数据不足: 仅 {len(hist)} 条")

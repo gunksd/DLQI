@@ -151,9 +151,9 @@ def run_training(params: dict, progress_cb: Callable):
 
 
 def _fetch_data(symbol: str) -> pd.DataFrame:
-    """获取股票数据：优先本地 CSV，回退 yfinance"""
+    """获取股票数据：优先本地 CSV，回退 akshare"""
     data_dir = settings.DATA_DIR
-    for prefix in ["us_", ""]:
+    for prefix in ["cn_", ""]:
         csv_path = os.path.join(data_dir, "raw", f"{prefix}{symbol}.csv")
         if os.path.isfile(csv_path):
             df = pd.read_csv(csv_path)
@@ -162,14 +162,13 @@ def _fetch_data(symbol: str) -> pd.DataFrame:
             logger.info(f"从本地 CSV 加载 {symbol}: {len(df)} 条")
             return df
 
-    # 回退到 yfinance
+    # 回退到 akshare
     try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period="5y", auto_adjust=True).reset_index()
-        df = df.rename(columns={"Date": "date", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
-        df["date"] = df["date"].dt.tz_localize(None)
-        logger.info(f"从 yfinance 获取 {symbol}: {len(df)} 条")
+        import akshare as ak
+        df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date="20160101", adjust="qfq")
+        df = df.rename(columns={"日期": "date", "开盘": "open", "最高": "high", "最低": "low", "收盘": "close", "成交量": "volume"})
+        df = df[["date", "open", "high", "low", "close", "volume"]]
+        logger.info(f"从 akshare 获取 {symbol}: {len(df)} 条")
         return df
     except Exception as e:
         logger.error(f"获取 {symbol} 数据失败: {e}")
@@ -418,14 +417,14 @@ def run_multi_stock_training(params: dict, progress_cb: Callable):
 
     progress_cb(2, "扫描可用股票数据...")
 
-    # 1. 收集所有 us_*.csv
+    # 1. 收集所有 cn_*.csv
     raw_dir = os.path.join(settings.DATA_DIR, "raw")
-    csv_files = sorted(glob_mod.glob(os.path.join(raw_dir, "us_*.csv")))
+    csv_files = sorted(glob_mod.glob(os.path.join(raw_dir, "cn_*.csv")))
     # 排除指数文件
     csv_files = [f for f in csv_files if "idx_" not in os.path.basename(f)]
 
     if not csv_files:
-        raise ValueError(f"未找到股票数据文件: {raw_dir}/us_*.csv")
+        raise ValueError(f"未找到股票数据文件: {raw_dir}/cn_*.csv")
 
     if max_stocks and len(csv_files) > max_stocks:
         csv_files = csv_files[:max_stocks]
@@ -446,7 +445,7 @@ def run_multi_stock_training(params: dict, progress_cb: Callable):
             df["target"] = df["returns"].shift(-1)
             df = df.dropna()
             if len(df) >= seq_len + 50:
-                sym = os.path.basename(csv_path).replace("us_", "").replace(".csv", "")
+                sym = os.path.basename(csv_path).replace("cn_", "").replace(".csv", "")
                 df["_symbol"] = sym
                 all_dfs.append(df)
         except Exception as e:

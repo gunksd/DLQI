@@ -166,16 +166,20 @@ async def get_predictions(
 
     target_symbol = symbol or info['symbol']
     if target_symbol == "MULTI":
-        raise HTTPException(status_code=400, detail="MULTI模型需要指定 symbol 参数，如 ?symbol=AAPL")
+        raise HTTPException(status_code=400, detail="MULTI模型需要指定 symbol 参数，如 ?symbol=600519")
 
     # 获取数据
     try:
-        import yfinance as yf
-        ticker = yf.Ticker(target_symbol)
-        df = ticker.history(period="2y", auto_adjust=True).reset_index()
+        import akshare as ak
+        df = ak.stock_zh_a_hist(
+            symbol=target_symbol, period="daily",
+            start_date="20230101",
+            end_date=__import__('datetime').datetime.now().strftime("%Y%m%d"),
+            adjust="qfq",
+        )
         df = df.rename(columns={
-            'Date': 'date', 'Open': 'open', 'High': 'high',
-            'Low': 'low', 'Close': 'close', 'Volume': 'volume'
+            '日期': 'date', '开盘': 'open', '最高': 'high',
+            '最低': 'low', '收盘': 'close', '成交量': 'volume'
         })
         df['date'] = df['date'].dt.tz_localize(None)
     except Exception as e:

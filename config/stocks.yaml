@@ -1,42 +1,33 @@
 # 股票池配置
-# 修改此文件来控制要获取哪些股票的数据
 
 # 数据时间范围
 date_range:
-  start: "2020-01-01"
-  end: "2024-12-31"
+  start: "2016-01-01"
+  end: "2026-12-31"
 
-# 美股 (通过 yfinance 获取, 免费无需 API key)
-us_stocks:
-  - symbol: AAPL
-    name: Apple
-  - symbol: MSFT
-    name: Microsoft
-  - symbol: GOOGL
-    name: Google
-  - symbol: AMZN
-    name: Amazon
-  - symbol: NVDA
-    name: NVIDIA
-
-# A股 (通过 akshare 获取, 免费无需 API key)
-# 格式: 6位代码, sh=上海, sz=深圳
+# A 股 (通过 akshare 获取, 免费无需 API key)
 cn_stocks:
   - symbol: "600519"
     name: 贵州茅台
     exchange: sh
-  - symbol: "000001"
-    name: 平安银行
+  - symbol: "601318"
+    name: 中国平安
+    exchange: sh
+  - symbol: "600036"
+    name: 招商银行
+    exchange: sh
+  - symbol: "300750"
+    name: 宁德时代
     exchange: sz
-  - symbol: "000858"
-    name: 五粮液
+  - symbol: "002594"
+    name: 比亚迪
     exchange: sz
 
-# 指数 (用作基准对比)
+# A 股指数 (用作基准对比)
 indices:
-  - symbol: "^GSPC"
-    name: S&P 500
-    source: yfinance
-  - symbol: "^IXIC"
-    name: NASDAQ
-    source: yfinance
+  - symbol: "000300"
+    name: 沪深300
+    source: akshare
+  - symbol: "000001"
+    name: 上证指数
+    source: akshare

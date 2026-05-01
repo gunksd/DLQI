@@ -352,8 +352,8 @@ async def get_correlation_matrix():
 
     if os.path.isdir(raw_dir):
         for f in sorted(os.listdir(raw_dir)):
-            if f.startswith("us_") and f.endswith(".csv") and "idx_" not in f:
-                sym = f.replace("us_", "").replace(".csv", "")
+            if f.startswith("cn_") and f.endswith(".csv") and "idx_" not in f:
+                sym = f.replace("cn_", "").replace(".csv", "")
                 try:
                     df = pd.read_csv(os.path.join(raw_dir, f))
                     rets = df['close'].pct_change().dropna().tolist()

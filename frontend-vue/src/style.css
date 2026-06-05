@@ -10,11 +10,77 @@
     color: #e5e7eb;
     margin: 0;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s, color 0.2s;
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: #111111; }
   ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+}
+
+/* ── 日间模式覆盖 ── */
+html.light-mode body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+html.light-mode ::-webkit-scrollbar-track { background: #e2e8f0; }
+html.light-mode ::-webkit-scrollbar-thumb { background: #94a3b8; }
+html.light-mode ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* terminal-* 颜色在日间模式下的映射 */
+html.light-mode .bg-terminal-bg    { background-color: #f8fafc !important; }
+html.light-mode .bg-terminal-surface { background-color: #f1f5f9 !important; }
+html.light-mode .bg-terminal-card  { background-color: #ffffff !important; }
+html.light-mode .border-terminal-border { border-color: #e2e8f0 !important; }
+html.light-mode .border-terminal-border\/50 { border-color: #e2e8f0 !important; }
+html.light-mode .text-terminal-text  { color: #0f172a !important; }
+html.light-mode .text-terminal-muted { color: #475569 !important; }
+html.light-mode .text-terminal-dim   { color: #64748b !important; }
+html.light-mode .hover\:bg-terminal-card:hover  { background-color: #f1f5f9 !important; }
+html.light-mode .hover\:bg-terminal-surface\/50:hover { background-color: #f1f5f9 !important; }
+html.light-mode .hover\:text-terminal-text:hover { color: #0f172a !important; }
+
+/* 侧边栏 & 顶栏 */
+html.light-mode aside,
+html.light-mode header {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* 卡片 */
+html.light-mode .t-card {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* 表格 */
+html.light-mode .t-table th {
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+html.light-mode .t-table td {
+  border-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+html.light-mode .t-table tr:hover td {
+  background-color: #f8fafc !important;
+}
+
+/* ghost 按钮 */
+html.light-mode .t-btn-ghost {
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+html.light-mode .t-btn-ghost:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* active nav link */
+html.light-mode .router-link-active {
+  color: #3b82f6 !important;
+  background-color: #eff6ff !important;
 }
 
 @layer components {

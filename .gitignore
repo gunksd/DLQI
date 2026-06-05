@@ -97,3 +97,17 @@ temp/
 # Reports
 claudedocs/*
 !claudedocs/.gitkeep
+
+# Personal files
+.claude/
+defense_ppt/
+screenshots/
+results/
+*.docx
+*.pdf
+*.pptx
+*.md.original
+65636*
+docs/thesis/
+docs/中期汇报.md
+node_modules/

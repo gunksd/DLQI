@@ -267,7 +267,8 @@ async def get_correlation_matrix():
         "symbols": symbols,
         "correlation_matrix": matrix,
         "benchmark_correlation": {},
-        "benchmark": "S&P 500",
+        "benchmark": "沪深300",
+        "benchmark_symbol": "000300",
         "concentration_risk": {
             "hhi_index": round(1.0 / len(symbols), 3),
             "effective_n": len(symbols),

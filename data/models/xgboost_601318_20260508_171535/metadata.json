@@ -1,0 +1,25 @@
+{
+  "model_id": "xgboost_601318_20260508_171535",
+  "model_type": "xgboost",
+  "symbol": "601318",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "returns",
+    "ma_5",
+    "ma_20",
+    "volatility",
+    "rsi",
+    "macd",
+    "macd_signal"
+  ],
+  "data_points": 2490,
+  "metrics": {
+    "val_rmse": 0.012852,
+    "direction_accuracy": 0.5412
+  },
+  "created_at": "2026-05-08T17:15:35.456517"
+}

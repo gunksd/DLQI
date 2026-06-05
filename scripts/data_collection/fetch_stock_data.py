@@ -37,7 +37,7 @@ def fetch_cn_stock(code: str, start: str, end: str | None = None) -> pd.DataFram
     try:
         df = ak.stock_zh_a_hist(
             symbol=code, period="daily",
-            start_date=start_fmt, end_date=end_fmt, adjust="qfq",
+            start_date=start_fmt, end_date=end_fmt, adjust="hfq",
         )
     except Exception as e:
         print(f"失败: {e}")

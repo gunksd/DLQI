@@ -24,7 +24,7 @@ from app.core.config import settings
 
 
 # ==================== 模型架构定义 ====================
-# 与 Colab 训练时完全一致的网络结构
+# 与 scripts/train_cn_models.py / train_champion.py 一致的网络结构
 # 仅在 PyTorch 可用时定义
 
 if HAS_TORCH:

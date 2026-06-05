@@ -130,7 +130,7 @@ def simulate_history(pid: str, days: int = 120) -> dict:
         hist = pd.read_csv(csv_path)
     else:
         import akshare as ak
-        df = ak.stock_zh_a_hist(symbol=target_symbol, period="daily", start_date="20160101", adjust="qfq")
+        df = ak.stock_zh_a_hist(symbol=target_symbol, period="daily", start_date="20160101", adjust="hfq")
         df = df.rename(columns={"日期":"date","开盘":"open","最高":"high","最低":"low","收盘":"close","成交量":"volume"})
         hist = df[["date","open","high","low","close","volume"]].copy()
 

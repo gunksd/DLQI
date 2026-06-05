@@ -100,11 +100,28 @@ async def compare_models(
             for row in reader:
                 backtest_data[row.get('model_id', '')] = row
 
+    # 建立前缀索引：model_dir_name -> 该模型所有回测行（MULTI 模型每个股票一行）
+    prefix_index: dict = {}
+    for csv_mid, row in backtest_data.items():
+        # 精确 key 直接用；带 _ 后缀的按前缀归组
+        parts = csv_mid.rsplit('_', 1)
+        if len(parts) == 2 and parts[1] in ('600519', '601318', '600036', '300750', '002594'):
+            prefix_index.setdefault(parts[0], []).append(row)
+        else:
+            prefix_index.setdefault(csv_mid, []).append(row)
+
     models = mgr.list_by_symbol(symbol) if symbol else mgr.list_models()
     comparison = []
     for m in models:
         mid = m['model_id']
-        bt = backtest_data.get(mid, {})
+        # 精确匹配优先；否则取前缀组里 sharpe 最高的一行
+        if mid in backtest_data:
+            bt = backtest_data[mid]
+        elif mid in prefix_index:
+            rows = prefix_index[mid]
+            bt = max(rows, key=lambda r: float(r.get('sharpe_ratio') or 0))
+        else:
+            bt = {}
         comparison.append({
             "model_id": mid,
             "name": m['name'],
@@ -175,7 +192,7 @@ async def get_predictions(
             symbol=target_symbol, period="daily",
             start_date="20230101",
             end_date=__import__('datetime').datetime.now().strftime("%Y%m%d"),
-            adjust="qfq",
+            adjust="hfq",
         )
         df = df.rename(columns={
             '日期': 'date', '开盘': 'open', '最高': 'high',

@@ -52,6 +52,14 @@
         <span class="font-mono text-xs text-terminal-dim">{{ currentTitle }}</span>
         <div class="ml-auto flex items-center gap-2">
           <span class="text-xs text-terminal-dim font-mono">{{ now }}</span>
+          <!-- 日间/夜间切换 -->
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded text-terminal-muted hover:text-terminal-text hover:bg-terminal-card transition-colors text-base"
+            :title="themeStore.isDark ? '切换日间模式' : '切换夜间模式'"
+            @click="themeStore.toggle()"
+          >
+            {{ themeStore.isDark ? '☀' : '🌙' }}
+          </button>
           <span
             class="w-2 h-2 rounded-full"
             :class="backendOk ? 'bg-gain' : 'bg-loss'"
@@ -76,10 +84,12 @@ import {
   Briefcase, ShieldAlert, Database, SlidersHorizontal
 } from 'lucide-vue-next'
 import { useBacktestStore } from '@/stores/backtest'
+import { useThemeStore } from '@/stores/theme'
 import { api } from '@/composables/api'
 
 const route = useRoute()
 const backtestStore = useBacktestStore()
+const themeStore = useThemeStore()
 const sidebarOpen = ref(true)
 const backendOk = ref(false)
 const now = ref('')

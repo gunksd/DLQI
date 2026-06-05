@@ -246,6 +246,8 @@ async def get_recommended_strategy(symbol: Optional[str] = None):
 
         # MULTI 模型稳定性加分：跨股票泛化能力
         stability_bonus = 0.05 if "MULTI" in row.get("model_id", "") else 0
+        # transformer 模型额外加分
+        transformer_bonus = 0.20 if row.get("model_type", "") == "transformer" else 0
 
         return round(
             sharpe_norm * 0.35
@@ -253,6 +255,7 @@ async def get_recommended_strategy(symbol: Optional[str] = None):
             + drawdown_norm * 0.20
             + accuracy_norm * 0.10
             + stability_bonus
+            + transformer_bonus
             + 0.10,  # 基础分
             4,
         )
@@ -272,6 +275,7 @@ async def get_recommended_strategy(symbol: Optional[str] = None):
             "drawdown_score": round(min(max(1 + drawdown, 0), 1) * 0.20, 4),
             "accuracy_score": round(min(max(accuracy, 0), 1) * 0.10, 4),
             "stability_bonus": 0.05 if "MULTI" in (result.get("model_id") or "") else 0,
+            "transformer_bonus": 0.20 if (result.get("model_type") or "") == "transformer" else 0,
         }
         scored.append(result)
 

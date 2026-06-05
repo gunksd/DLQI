@@ -32,7 +32,7 @@ def fetch_stock(symbol: str, name: str):
         period="daily",
         start_date=START_DATE,
         end_date=END_DATE,
-        adjust="qfq",
+        adjust="hfq",
     )
     df = df.rename(columns={
         "日期": "date", "开盘": "open", "最高": "high",

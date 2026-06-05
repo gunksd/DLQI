@@ -70,7 +70,6 @@ export const api = {
   getRiskOverview: () => r(http.get("/risk/overview")),
   getVaR: (params?: { confidence?: number; window?: number }) =>
     r(http.get("/risk/var", { params })),
-  getRiskMetrics: () => r(http.get("/risk/metrics")),
   getRiskAlerts: () => r(http.get("/risk/alerts")),
   runStressTest: (data: { strategy_id: number; scenarios: string[] }) =>
     r(http.post("/risk/stress-test", data)),

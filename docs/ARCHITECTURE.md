@@ -31,8 +31,7 @@
 - **Pydantic**: 数据验证和设置管理
 
 #### 数据获取与处理
-- **Tushare**: 国内股票数据源
-- **yfinance**: Yahoo Finance 数据接口
+- **AKShare**: A 股行情数据源（日 K 线前/后复权）
 - **pandas**: 数据处理核心库
 - **numpy**: 数值计算
 - **polars**: 高性能数据处理（可选）

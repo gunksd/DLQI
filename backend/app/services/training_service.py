@@ -165,7 +165,7 @@ def _fetch_data(symbol: str) -> pd.DataFrame:
     # 回退到 akshare
     try:
         import akshare as ak
-        df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date="20160101", adjust="qfq")
+        df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date="20160101", adjust="hfq")
         df = df.rename(columns={"日期": "date", "开盘": "open", "最高": "high", "最低": "low", "收盘": "close", "成交量": "volume"})
         df = df[["date", "open", "high", "low", "close", "volume"]]
         logger.info(f"从 akshare 获取 {symbol}: {len(df)} 条")

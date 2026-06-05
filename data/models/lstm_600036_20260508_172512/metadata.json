@@ -1,0 +1,27 @@
+{
+  "model_id": "lstm_600036_20260508_172512",
+  "model_type": "lstm",
+  "symbol": "600036",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "returns",
+    "ma_5",
+    "ma_20",
+    "volatility",
+    "rsi",
+    "macd",
+    "macd_signal"
+  ],
+  "data_points": 2490,
+  "metrics": {
+    "val_rmse": 0.01149,
+    "direction_accuracy": 0.4835
+  },
+  "val_loss": 0.000132,
+  "epochs": 50,
+  "created_at": "2026-05-08T17:25:12.247969"
+}

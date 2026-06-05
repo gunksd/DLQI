@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 
-from app.api import data, models, strategies, backtest, risk
+from app.api import data, models, backtest, risk
 from app.api import jobs as jobs_api
 from app.api import paper_trading
 from app.core.config import settings
@@ -50,7 +50,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(data.router, prefix="/api/data", tags=["数据管理"])
 app.include_router(models.router, prefix="/api/models", tags=["模型管理"])
-app.include_router(strategies.router, prefix="/api/strategies", tags=["策略管理"])
+# strategies.router 前端当前未使用，暂不挂载（文件保留供后续扩展）
 app.include_router(backtest.router, prefix="/api/backtest", tags=["回测系统"])
 app.include_router(risk.router, prefix="/api/risk", tags=["风险控制"])
 app.include_router(jobs_api.router, prefix="/api/jobs", tags=["任务管理"])

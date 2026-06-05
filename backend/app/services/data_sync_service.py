@@ -35,7 +35,7 @@ def run_data_sync(params: dict, progress_cb: Callable) -> dict:
                 period="daily",
                 start_date="20160101",
                 end_date=datetime.now().strftime("%Y%m%d"),
-                adjust="qfq",
+                adjust="hfq",
             )
             df = df.rename(columns={
                 "日期": "date", "开盘": "open", "最高": "high",

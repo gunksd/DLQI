@@ -1,0 +1,27 @@
+{
+  "model_id": "lstm_002594_20260508_173055",
+  "model_type": "lstm",
+  "symbol": "002594",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "returns",
+    "ma_5",
+    "ma_20",
+    "volatility",
+    "rsi",
+    "macd",
+    "macd_signal"
+  ],
+  "data_points": 2490,
+  "metrics": {
+    "val_rmse": 0.01973,
+    "direction_accuracy": 0.4835
+  },
+  "val_loss": 0.000389,
+  "epochs": 39,
+  "created_at": "2026-05-08T17:30:55.549760"
+}

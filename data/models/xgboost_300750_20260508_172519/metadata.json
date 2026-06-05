@@ -1,0 +1,25 @@
+{
+  "model_id": "xgboost_300750_20260508_172519",
+  "model_type": "xgboost",
+  "symbol": "300750",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "returns",
+    "ma_5",
+    "ma_20",
+    "volatility",
+    "rsi",
+    "macd",
+    "macd_signal"
+  ],
+  "data_points": 1897,
+  "metrics": {
+    "val_rmse": 0.027991,
+    "direction_accuracy": 0.4836
+  },
+  "created_at": "2026-05-08T17:25:19.191235"
+}
